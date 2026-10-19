@@ -130,7 +130,13 @@ In **Trade → New order**:
    - **Limit**: trade only at a better price. A limit **buy** waits for the price to fall to your level; a limit **sell** waits for it to rise.
    - **Stop**: trade when the price breaks through a level. A stop **buy** triggers when price rises to your level; a stop **sell** when it falls to it.
 3. Enter the **amount to invest** (in your display currency) or use the quick **% of cash** buttons.
-4. Optionally set a **Stop loss** (closes the trade if the price goes against you), a **Take profit** (closes it when the target is reached) and a **Trailing stop** (a stop that follows the price at a distance you choose and never moves backward).
+4. **Stop loss and take profit are filled in for you.** A **Stop loss** closes the trade if the price goes against you; a **Take profit** closes it when the target is reached. The app suggests both automatically from the market's recent volatility (the stop 1.5× the typical candle range away, the target 3× away, a 1 : 2 risk-to-reward). They are only a starting point, so change them any way you like:
+   - drag the **slider** to move a level closer to or further from the entry price,
+   - press **Tighter** or **Wider** for small steps,
+   - tap a **preset**: for the stop, 0.5×, 1×, 1.5×, 2× or 3× the typical range (ATR); for the target, 1R, 1.5R, 2R or 3R (R = the distance to your stop, so 2R is twice as far),
+   - or type an exact price.
+
+   Each level shows how far away it is (in % and ATR), and **how much you would gain or lose if it is hit, after fees**. Both levels also appear on the chart as dashed "SL (new)" and "TP (new)" lines while you adjust them. **↺ suggest** restores the automatic value and **✕ none** removes a level. Untick *Suggest stop loss and target automatically* if you prefer to start empty. Optionally add a **Trailing stop** (a stop that follows the price at a distance you choose and never moves backward).
 5. Check the preview: quantity, fees, and **what you gain or lose if the stop or target is hit**.
 
 Pending limit and stop orders appear under **Pending orders** and as orange lines on the chart. You can cancel them at any time.
@@ -146,7 +152,7 @@ Open **Size by risk**, enter the percentage of your account you are willing to l
 
 ### Managing positions
 
-Each open position has a card showing profit, the stop-to-target bar, quantity and amount invested. **Edit stop / target** changes the levels, **Close position** closes it, and **Close all** closes everything. Click a symbol name on a card to jump to its chart.
+Each open position has a card showing profit, the stop-to-target bar, quantity and amount invested. **Edit stop / target** opens the same interactive slider, preset and price controls for that position (it fills in a suggestion for any level that is missing, and shows the levels on the chart while you edit), **Close position** closes it, and **Close all** closes everything. Click a symbol name on a card to jump to its chart.
 
 > Paper trading has no slippage (you always get the price you see) and stock prices may be delayed, so real trading will behave differently.
 

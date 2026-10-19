@@ -65,10 +65,12 @@ export default function Tour({ open, steps, onClose }: Props) {
       if (r.width < 2 || r.height < 2) { setRect(null); return; }
       setRect((old) => (old && old.left === r.left && old.top === r.top && old.width === r.width && old.height === r.height ? old : r));
     };
-    const first = window.setTimeout(measure, 150);
-    const t = window.setInterval(measure, 300);
+    measure();                                                  // synchronous: the target is usually already on screen
+    const raf = requestAnimationFrame(() => requestAnimationFrame(measure));
+    const settle = [120, 400].map((ms) => window.setTimeout(measure, ms)); // catches layout that shifts after a tab switch
+    const t = window.setInterval(measure, 400);
     window.addEventListener('resize', measure);
-    return () => { clearTimeout(first); clearInterval(t); window.removeEventListener('resize', measure); };
+    return () => { cancelAnimationFrame(raf); settle.forEach(clearTimeout); clearInterval(t); window.removeEventListener('resize', measure); };
   }, [open, i]);
 
   useLayoutEffect(() => { if (tip.current) setH(tip.current.offsetHeight); }, [i, open, rect]);
@@ -76,7 +78,6 @@ export default function Tour({ open, steps, onClose }: Props) {
 
   const finish = useCallback((done: boolean) => onClose(done), [onClose]);
   const go = useCallback((d: number) => {
-    setRect(null);
     setI((x) => Math.min(Math.max(0, x + d), stepsRef.current.length - 1));
   }, []);
 
@@ -100,7 +101,7 @@ export default function Tour({ open, steps, onClose }: Props) {
       {rect
         ? <div className="tour-hole" style={{ left: rect.left - PAD, top: rect.top - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }} />
         : <div className="tour-dim" />}
-      <div className="tour-tip" ref={tip} style={{ left: pos.left, top: pos.top, width: TIP_W }}>
+      <div className="tour-tip" ref={tip} style={{ transform: `translate(${Math.round(pos.left)}px, ${Math.round(pos.top)}px)`, width: TIP_W }}>
         <div className="tour-step">Step {i + 1} of {steps.length}</div>
         <h4>{step.title}</h4>
         <div className="tour-body">{step.body}</div>

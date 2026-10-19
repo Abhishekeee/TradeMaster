@@ -8,6 +8,7 @@ import Stats from './components/Stats';
 import Advisor from './components/Advisor';
 import IndicatorsMenu from './components/IndicatorsMenu';
 import Tour, { type TourStep } from './components/Tour';
+import type { PreviewLine } from './components/LevelEditor';
 import { advise, levels as srLevels } from './engine/patterns.js';
 import Pane from './components/Pane';
 import { useAlerts } from './alerts';
@@ -52,6 +53,16 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(prefs.theme === 'light' ? 'light' : 'dark');
   const [showMarkets, setShowMarkets] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [preview, setPreview] = useState<Record<string, PreviewLine[]>>({});
+  const onPreview = useCallback((key: string, lines: PreviewLine[]) => {
+    setPreview((p) => {
+      const prev = p[key] ?? [];
+      if (prev.length === lines.length && prev.every((l, i) => l.price === lines[i].price && l.title === lines[i].title)) return p;
+      const n = { ...p };
+      if (lines.length) n[key] = lines; else delete n[key];
+      return n;
+    });
+  }, []);
   const [rtab, setRtab] = useState<'advisor' | 'analysis' | 'trade' | 'alerts' | 'stats'>('advisor');
   const [bt, setBt] = useState<BacktestResult | null>(null);
   const [strat, setStrat] = useState<StrategyResult | null>(null);
@@ -211,6 +222,16 @@ export default function App() {
     return out;
   }, [analysis, bt, tf, inst, htf]);
 
+  // average candle range over the last 50 candles: the basis for suggesting a stop loss and target
+  const atr = useMemo(() => {
+    const c = candles.current;
+    if (c.length < 20) return null;
+    const t = c.slice(-50);
+    let s = 0;
+    for (let i = 1; i < t.length; i++) { const k = t[i], pc = t[i - 1].close; s += Math.max(k.high - k.low, Math.abs(k.high - pc), Math.abs(k.low - pc)); }
+    return s / (t.length - 1);
+  }, [analysis]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const levels = useMemo(() => (analysis && candles.current.length >= 60 ? (srLevels(candles.current) as { price: number; touches: number }[]) : []), [analysis]);
 
   const sendAdvice = () => {
@@ -245,6 +266,7 @@ export default function App() {
       if (p.sl !== undefined) out.push({ price: p.sl, color: '#ef5350', title: 'SL', dashed: true });
       if (p.tp !== undefined) out.push({ price: p.tp, color: '#26a69a', title: 'TP', dashed: true });
     });
+    Object.values(preview).forEach((ls) => ls.forEach((l) => out.push(l)));
     (paper.acc.orders ?? []).filter((o) => o.inst.id === inst.id).forEach((o) => {
       out.push({ price: o.trigger, color: '#f5a623', title: `${o.kind.toUpperCase()} ${o.side === 'long' ? 'BUY' : 'SELL'}`, dashed: true });
     });
@@ -254,7 +276,7 @@ export default function App() {
       out.push({ price: advice.tp2, color: '#26a69a', title: 'AI TP2', dashed: true });
     }
     return out;
-  }, [paper.acc.positions, paper.acc.orders, prices, inst.id, showAdvice, advice, cur, rtab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paper.acc.positions, paper.acc.orders, prices, inst.id, showAdvice, advice, cur, rtab, preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 5000); return () => clearTimeout(t); }, [toast]);
 
@@ -422,7 +444,7 @@ export default function App() {
             : rtab === 'alerts'
             ? <Alerts inst={inst} tf={tf} price={prices[inst.id] ?? price?.px ?? null} api={alerts} />
             : rtab === 'trade'
-            ? <Trade inst={inst} price={prices[inst.id] ?? price?.px ?? null} prices={prices} paper={paper} prefill={prefill} cur={cur} usdPer={fx.usdPer} onOpen={setInst} />
+            ? <Trade inst={inst} price={prices[inst.id] ?? price?.px ?? null} prices={prices} paper={paper} prefill={prefill} cur={cur} usdPer={fx.usdPer} onOpen={setInst} atr={atr} onPreview={onPreview} />
             : analysis ? <Panel analysis={analysis} symbol={symbol} tf={tf} sel={sel} signals={signals} onSelect={select} onTf={setTf} scan={scan} backtest={backtest} onSetup={tradeSetup} /> : <aside className="panel"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
         </div>
       </div>

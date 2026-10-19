@@ -291,8 +291,8 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .tour { position: fixed; inset: 0; z-index: 2000; }
 .tour-block { position: absolute; inset: 0; }
 .tour-dim { position: absolute; inset: 0; background: rgba(8, 10, 18, .7); }
-.tour-hole { position: fixed; border-radius: 8px; box-shadow: 0 0 0 100vmax rgba(8, 10, 18, .7); outline: 2px solid var(--blue); outline-offset: 0; pointer-events: none; transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }
-.tour-tip { position: fixed; max-width: calc(100vw - 20px); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .55); }
+.tour-hole { position: fixed; border-radius: 8px; box-shadow: 0 0 0 100vmax rgba(8, 10, 18, .7); outline: 2px solid var(--blue); outline-offset: 0; pointer-events: none; transition: left .14s ease-out, top .14s ease-out, width .14s ease-out, height .14s ease-out; }
+.tour-tip { position: fixed; left: 0; top: 0; will-change: transform; transition: transform .16s ease-out; max-width: calc(100vw - 20px); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .55); }
 .tour-step { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .6px; }
 .tour-tip h4 { margin: 4px 0 6px; font-size: 16px; }
 .tour-body { font-size: 13px; line-height: 1.5; }
@@ -308,3 +308,31 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .tour-btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
 .tour-skip { background: none; border: 0; color: var(--mute); padding: 6px 2px; }
 .tour-skip:hover { color: var(--text); text-decoration: underline; }
+
+/* ---- interactive stop loss / take profit editor ---- */
+.lvl { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.lvl.sl { border-left: 3px solid var(--down); } .lvl.tp { border-left: 3px solid var(--up); }
+.lvl-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.lvl-link { background: none; border: 0; color: var(--mute); font-size: 11px; padding: 2px 4px; }
+.lvl-link:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
+.lvl-link:disabled { opacity: .4; cursor: default; }
+.lvl-row { display: flex; gap: 6px; align-items: stretch; }
+.lvl-row .igroup { flex: 1; min-width: 0; }
+.lvl-step { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 9px; font-size: 12px; white-space: nowrap; }
+.lvl-step:hover:not(:disabled) { background: var(--hover); }
+.lvl-step:disabled { opacity: .4; }
+.lvl-range { width: 100%; margin: 10px 0 4px; height: 22px; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.lvl-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--line); }
+.lvl-range.sl::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--down) 0%, var(--line) 100%); opacity: .8; }
+.lvl-range.tp::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--line) 0%, var(--up) 100%); opacity: .8; }
+.lvl-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--text); border: 3px solid var(--blue); box-shadow: 0 1px 4px #0006; }
+.lvl-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--line); }
+.lvl-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 3px solid var(--blue); }
+.lvl-range:disabled { opacity: .4; cursor: default; }
+.lvl-info { min-height: 18px; }
+.lvl-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lvl-chips button { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; font-size: 11px; }
+.lvl-chips button:hover { background: var(--hover); }
+.lvl-chips button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.autochk { margin-top: 10px; }
+.pedit2 { margin-top: 4px; }

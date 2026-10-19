@@ -4,12 +4,15 @@ import type { Cur } from '../fx';
 import { costOf, exitFeeOf, feeInOf, FEE_DEFAULT, netPnl, pnlOf, type Position, type usePaper } from '../paper';
 import { usePrices } from '../priceStore';
 import { fmt, type Instrument } from '../types';
+import LevelEditor, { fmtPrice, suggestLevel, type PreviewLine } from './LevelEditor';
 
 type Paper = ReturnType<typeof usePaper>;
 export interface Prefill { side: 'long' | 'short'; sl: number; tp: number; note: string; nonce: number }
 interface Props {
   inst: Instrument; price: number | null; prices: Record<string, number>; paper: Paper; prefill: Prefill | null;
   cur: Cur; usdPer: (ccy: string) => number; onOpen(i: Instrument): void;
+  atr: number | null;                                       // recent average range of the chart being viewed
+  onPreview(key: string, lines: PreviewLine[]): void;       // draws the levels being edited on the chart
 }
 
 const col = (x: number) => (x > 0 ? 'up' : x < 0 ? 'down' : '');
@@ -40,13 +43,15 @@ function RangeBar({ p, now }: { p: Position; now: number }) {
   );
 }
 
-function PositionCard({ p, px, cur, paper, onOpen }: { p: Position; px: number; cur: Cur; paper: Paper; onOpen(i: Instrument): void }) {
+function PositionCard({ p, px, cur, paper, onOpen, atr, viewed, onPreview }: { p: Position; px: number; cur: Cur; paper: Paper; onOpen(i: Instrument): void; atr: number | null; viewed: boolean; onPreview(key: string, lines: PreviewLine[]): void }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState(false);
   const [sl, setSl] = useState(p.sl !== undefined ? String(p.sl) : '');
   const [tp, setTp] = useState(p.tp !== undefined ? String(p.tp) : '');
   const [err, setErr] = useState('');
+  const [slAuto, setSlAuto] = useState(false);
+  const [tpAuto, setTpAuto] = useState(false);
   useEffect(() => { if (!confirm) return; const t = setTimeout(() => setConfirm(false), 3000); return () => clearTimeout(t); }, [confirm]);
 
   const long = p.side === 'long';
@@ -63,6 +68,24 @@ function PositionCard({ p, px, cur, paper, onOpen }: { p: Position; px: number; 
     paper.close(p.id, q?.price ?? px);
   };
   const unit = p.ccy ?? 'USD';
+
+  // opening the editor fills in a suggestion for any level that is missing, so there is always something to adjust
+  const startEdit = () => {
+    const s = p.sl !== undefined ? fmtPrice(p.sl) : fmtPrice(suggestLevel('sl', p.side, px, atr));
+    const t = p.tp !== undefined ? fmtPrice(p.tp) : fmtPrice(suggestLevel('tp', p.side, px, atr));
+    setSl(s); setTp(t); setSlAuto(p.sl === undefined); setTpAuto(p.tp === undefined); setErr(''); setEdit(true);
+  };
+  // show the levels being edited on the chart (only possible for the symbol on screen)
+  useEffect(() => {
+    const key = 'pos-' + p.id;
+    if (!edit || !viewed) { onPreview(key, []); return; }
+    const out: PreviewLine[] = [];
+    const s = num(sl), t = num(tp);
+    if (s !== undefined && Number.isFinite(s)) out.push({ price: s, color: '#ef5350', title: 'SL (editing)', dashed: true });
+    if (t !== undefined && Number.isFinite(t)) out.push({ price: t, color: '#26a69a', title: 'TP (editing)', dashed: true });
+    onPreview(key, out);
+    return () => onPreview(key, []);
+  }, [edit, viewed, sl, tp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => {
     const s = num(sl), t = num(tp);
@@ -101,16 +124,25 @@ function PositionCard({ p, px, cur, paper, onOpen }: { p: Position; px: number; 
       </div>
 
       {edit ? (
-        <div className="pedit">
-          <label>Stop <input inputMode="decimal" value={sl} placeholder="none" onChange={(e) => setSl(e.target.value)} /></label>
-          <label>Target <input inputMode="decimal" value={tp} placeholder="none" onChange={(e) => setTp(e.target.value)} /></label>
-          <button className="mini on" onClick={save}>Save</button>
-          <button className="mini" onClick={() => { setEdit(false); setErr(''); }}>Cancel</button>
-          {err && <div className="small down" style={{ flexBasis: '100%' }}>{err}</div>}
+        <div className="pedit2">
+          <LevelEditor kind="sl" side={p.side} entry={px} value={sl} auto={slAuto} atr={atr} cur={cur}
+            onChange={(v) => { setSl(v); setSlAuto(false); }}
+            onReset={() => { setSl(fmtPrice(suggestLevel('sl', p.side, px, atr))); setSlAuto(true); }}
+            result={(lvl) => netPnl(p, lvl, fxn)} />
+          <LevelEditor kind="tp" side={p.side} entry={px} value={tp} auto={tpAuto} atr={atr} cur={cur} other={num(sl) ?? null}
+            onChange={(v) => { setTp(v); setTpAuto(false); }}
+            onReset={() => { setTp(fmtPrice(suggestLevel('tp', p.side, px, atr))); setTpAuto(true); }}
+            result={(lvl) => netPnl(p, lvl, fxn)} />
+          <div className="small">Distances are measured from the current price (<b>{fmt(px)}</b>). "If hit" is your profit or loss after fees.</div>
+          {err && <div className="small down">{err}</div>}
+          <div className="pact" style={{ marginTop: 8 }}>
+            <button className="mini on" onClick={save}>Save levels</button>
+            <button className="mini" onClick={() => { setEdit(false); setErr(''); }}>Cancel</button>
+          </div>
         </div>
       ) : (
         <div className="pact">
-          <button className="mini" onClick={() => setEdit(true)}>Edit stop / target</button>
+          <button className="mini" onClick={startEdit}>Edit stop / target</button>
           <button className={`mini ${confirm ? 'danger' : ''}`} disabled={busy} onClick={() => (confirm ? closeNow() : setConfirm(true))}>
             {busy ? 'Closing…' : confirm ? 'Confirm close' : 'Close position'}
           </button>
@@ -120,7 +152,7 @@ function PositionCard({ p, px, cur, paper, onOpen }: { p: Position; px: number; 
   );
 }
 
-export default function Trade({ inst, price: priceProp, prices: pricesProp, paper, prefill, cur, usdPer, onOpen }: Props) {
+export default function Trade({ inst, price: priceProp, prices: pricesProp, paper, prefill, cur, usdPer, onOpen, atr, onPreview }: Props) {
   const { acc } = paper;
   // live prices come straight from the tick store (about 15 updates a second); the props are only the starting values
   const live = usePrices();
@@ -138,11 +170,15 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const [kind, setKind] = useState<'market' | 'limit' | 'stop'>('market');
   const [trigger, setTrigger] = useState('');
   const [trail, setTrail] = useState('');
+  const [auto, setAuto] = useState(true);          // suggest a stop and target automatically
+  const [slT, setSlT] = useState(false);           // the user has taken over the stop
+  const [tpT, setTpT] = useState(false);           // ... and the target
+  const [nonce, setNonce] = useState(0);
   useEffect(() => { if (!closeAll) return; const t = setTimeout(() => setCloseAll(false), 3000); return () => clearTimeout(t); }, [closeAll]);
 
   useEffect(() => {
     if (!prefill) return;
-    setSide(prefill.side); setSl(fmt(prefill.sl)); setTp(fmt(prefill.tp)); setNote(prefill.note);
+    setSide(prefill.side); setSl(fmtPrice(prefill.sl)); setTp(fmtPrice(prefill.tp)); setNote(prefill.note); setSlT(true); setTpT(true);
   }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const last = (id: string, fallback: number) => prices[id] ?? fallback;
@@ -170,8 +206,29 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const trigBad = kind !== 'market' && price && trigN !== undefined && (below ? trigN >= price : trigN <= price) ? `Trigger must be ${below ? 'below' : 'above'} the current price ${fmt(price)}` : '';
   const slBad = ref && slN !== undefined && (long ? slN >= ref : slN <= ref) ? `Stop should be ${long ? 'below' : 'above'} ${fmt(ref)}` : '';
   const tpBad = ref && tpN !== undefined && (long ? tpN <= ref : tpN >= ref) ? `Target should be ${long ? 'above' : 'below'} ${fmt(ref)}` : '';
-  const lossUSD = ref && slN !== undefined && !slBad ? amtUSD * (Math.abs(ref - slN) / ref) : null;
-  const gainUSD = ref && tpN !== undefined && !tpBad ? amtUSD * (Math.abs(tpN - ref) / ref) : null;
+  const feesUSD = amtUSD * rate * 2;                     // entry and exit
+  // both figures are what you would really lose or make: the move itself plus (or minus) the fees
+  const lossUSD = ref && slN !== undefined && !slBad ? amtUSD * (Math.abs(ref - slN) / ref) + feesUSD : null;
+  const gainUSD = ref && tpN !== undefined && !tpBad ? Math.max(0, amtUSD * (Math.abs(tpN - ref) / ref) - feesUSD) : null;
+
+  // new symbol: forget any levels from the last one
+  useEffect(() => { setSl(''); setTp(''); setSlT(false); setTpT(false); }, [inst.id]);
+  // Fill in a stop and target automatically. This re-runs when the side, order type, trigger, volatility or symbol change,
+  // but NOT on every price tick, so the numbers do not move while you are adjusting them.
+  useEffect(() => {
+    if (!auto || !ref) return;
+    if (!slT) setSl(fmtPrice(suggestLevel('sl', side, ref, atr)));
+    if (!tpT) setTp(fmtPrice(suggestLevel('tp', side, ref, atr)));
+  }, [auto, side, kind, trigN, inst.id, atr, ref === null, nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // draw the levels you are setting on the chart while this panel is open
+  useEffect(() => {
+    const out: PreviewLine[] = [];
+    if (slN !== undefined && Number.isFinite(slN) && !slBad) out.push({ price: slN, color: '#ef5350', title: 'SL (new)', dashed: true });
+    if (tpN !== undefined && Number.isFinite(tpN) && !tpBad) out.push({ price: tpN, color: '#26a69a', title: 'TP (new)', dashed: true });
+    onPreview('ticket', out);
+    return () => onPreview('ticket', []);
+  }, [slN, tpN, slBad, tpBad]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // size the position so that hitting the stop loses `risk`% of equity
   const sizeByRisk = () => {
@@ -198,12 +255,12 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       if (trigN === undefined) { setMsg({ ok: false, t: 'Enter a trigger price.' }); return; }
       const err = paper.placeOrder(inst, side, kind, trigN, amtUSD, price, slN, tpN, trailN);
       setMsg(err ? { ok: false, t: err } : { ok: true, t: `${kind === 'limit' ? 'Limit' : 'Stop'} order placed: ${long ? 'buy' : 'sell'} when ${inst.id} reaches ${fmt(trigN)}.` });
-      if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); }
+      if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
       return;
     }
     const err = paper.open(inst, side, amtUSD, price, slN, tpN, trailN);
     setMsg(err ? { ok: false, t: err } : { ok: true, t: `${long ? 'Bought' : 'Sold short'} ${qty.toPrecision(4)} ${inst.id} at ${fmt(price)} ${ccy}` });
-    if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrail(''); }
+    if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
   };
 
   return (
@@ -253,7 +310,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
         )}
       </div>
       {acc.positions.length ? acc.positions.map((p) => (
-        <PositionCard key={p.id} p={p} px={last(p.inst.id, p.entry)} cur={cur} paper={paper} onOpen={onOpen} />
+        <PositionCard key={p.id} p={p} px={last(p.inst.id, p.entry)} cur={cur} paper={paper} onOpen={onOpen} atr={p.inst.id === inst.id ? atr : null} viewed={p.inst.id === inst.id} onPreview={onPreview} />
       )) : <div className="empty">No open positions yet.<br /><span className="small">Place an order below, or use “Trade this setup” in the Analysis tab.</span></div>}
 
       {(acc.orders ?? []).length > 0 && (<>
@@ -304,10 +361,15 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
 
         {note && <div className="note">{note}</div>}
 
-        <div className="two">
-          <label className="fld">Stop loss <span className="igroup"><input inputMode="decimal" placeholder="optional" value={sl} onChange={(e) => setSl(e.target.value)} /></span></label>
-          <label className="fld">Take profit <span className="igroup"><input inputMode="decimal" placeholder="optional" value={tp} onChange={(e) => setTp(e.target.value)} /></span></label>
-        </div>
+        <label className="chk autochk"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); if (e.target.checked) { setSlT(false); setTpT(false); setNonce((n) => n + 1); } }} /> Suggest stop loss and target automatically</label>
+        <LevelEditor kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
+          onChange={(v) => { setSl(v); setSlT(true); }}
+          onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
+          result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+        <LevelEditor kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
+          onChange={(v) => { setTp(v); setTpT(true); }}
+          onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
+          result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
         <label className="fld">Trailing stop (% behind the best price, optional)
           <span className="igroup"><input inputMode="decimal" placeholder="e.g. 1.5" value={trail} onChange={(e) => setTrail(e.target.value)} /></span>
         </label>
@@ -326,8 +388,8 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
         <div className="preview">
           <div><span>{mult > 1 ? 'Contracts' : 'Quantity'}</span><b>{qty ? qty.toPrecision(4) : '–'}</b></div>
           <div><span>Fees in + out ({(rate * 100).toFixed(2)}% each)</span><b>{amtUSD ? cur.money(amtUSD * rate * 2) : '–'}</b></div>
-          <div><span>If stopped</span><b className="down">{lossUSD !== null ? `−${cur.money(lossUSD)}` : '–'}</b></div>
-          <div><span>If target hit</span><b className="up">{gainUSD !== null ? `+${cur.money(gainUSD)}` : '–'}</b></div>
+          <div><span>If stopped (after fees)</span><b className="down">{lossUSD !== null ? `−${cur.money(lossUSD)}` : '–'}</b></div>
+          <div><span>If target hit (after fees)</span><b className="up">{gainUSD !== null ? `+${cur.money(gainUSD)}` : '–'}</b></div>
           {lossUSD && gainUSD ? <div className="wide"><span>Reward : risk</span><b>{(gainUSD / lossUSD).toFixed(1)} : 1</b></div> : null}
         </div>
 
