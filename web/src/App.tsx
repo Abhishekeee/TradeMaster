@@ -7,6 +7,7 @@ import Alerts from './components/Alerts';
 import Stats from './components/Stats';
 import Advisor from './components/Advisor';
 import IndicatorsMenu from './components/IndicatorsMenu';
+import Tour, { type TourStep } from './components/Tour';
 import { advise, levels as srLevels } from './engine/patterns.js';
 import Pane from './components/Pane';
 import { useAlerts } from './alerts';
@@ -50,6 +51,7 @@ export default function App() {
 
   const [theme, setTheme] = useState<'dark' | 'light'>(prefs.theme === 'light' ? 'light' : 'dark');
   const [showMarkets, setShowMarkets] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [rtab, setRtab] = useState<'advisor' | 'analysis' | 'trade' | 'alerts' | 'stats'>('advisor');
   const [bt, setBt] = useState<BacktestResult | null>(null);
   const [strat, setStrat] = useState<StrategyResult | null>(null);
@@ -297,6 +299,63 @@ export default function App() {
     return runBacktest(data, h, min, onProgress);
   }, [inst, tf, demo]);
 
+  // ---- guided tour (opens automatically on the first visit; replay it with the ? Tour button)
+  const tourSteps: TourStep[] = useMemo(() => [
+    { title: 'Welcome to TradeMaster', placement: 'center', body: <>
+      <p>A charting and practice platform: live charts, automatic pattern detection, an AI trade advisor, and paper trading.</p>
+      <p>This one-minute tour shows what each part does. Everything you trade here uses <b>virtual money</b>, so you can experiment freely.</p>
+      <p className="tour-hint">Use the arrow keys or the buttons. Press Esc to leave at any time.</p></> },
+    { target: '.symsearch', placement: 'bottom', title: 'Search any market', body: <>
+      <p>Type a name or symbol, then pick a result:</p>
+      <p><code>BTCUSDT</code> <code>AAPL</code> <code>RELIANCE.NS</code> <code>EURUSD=X</code> <code>gold</code> <code>nifty</code></p>
+      <p>Crypto, stocks, forex, commodities, futures and indices all work.</p></> },
+    { target: '[data-tour="markets"]', placement: 'bottom', title: 'Browse, scan and watch', body: <>
+      <p><b>Markets</b> lists live prices by category, shows US and India (NSE) option chains, keeps your watchlist, and has a <b>Scanner</b> that ranks a whole market by chart patterns.</p></> },
+    { target: '.seg', placement: 'bottom', title: 'Choose a timeframe', body: <>
+      <p>Each candle covers this much time. <b>1h</b> or <b>1D</b> is a good place to start.</p>
+      <p>Patterns, signals and the AI advisor are all recalculated for the timeframe you pick.</p></> },
+    { target: '.menu', placement: 'right', title: 'Pattern menu', before: () => setTab('chart'), body: <>
+      <p>Every chart and candlestick pattern, scored by how closely it matches <i>right now</i>. The best match is tagged <b>CLOSEST</b>. Click one to draw it on the chart.</p>
+      <p className="tour-hint">The percentage is how similar the shape is. It is not the chance of winning.</p></> },
+    { target: '.banner', placement: 'bottom', title: 'The chart at a glance', body: <>
+      <p>This line names the pattern that is forming and the overall bias. Green and red arrows on the candles are buy and sell candlestick signals.</p>
+      <p><b>Mouse wheel</b> zooms, <b>drag</b> pans, and the buttons below reset the view.</p></> },
+    { target: '.drawbar', placement: 'right', title: 'Drawing tools', body: <>
+      <p>Horizontal line, trend line and Fibonacci. Click a drawn line to select it, then press <b>Delete</b>. <b>Esc</b> cancels a tool.</p>
+      <p>Drawings are saved for each symbol. The camera button saves a picture of the chart.</p></> },
+    { target: '.popwrap', placement: 'bottom', title: 'Indicators', body: <>
+      <p>Add Bollinger Bands, VWAP, support and resistance levels, plus RSI and MACD panels under the chart.</p></> },
+    { target: '.rside', placement: 'left', title: 'AI advisor', before: () => setRtab('advisor'), body: <>
+      <p>Suggests <b>Buy, Sell or Wait</b> with an entry, stop loss and targets, then shows how that kind of setup really performed on this symbol before.</p>
+      <p className="tour-hint">Honest note: in our own tests these signals did not beat trading costs. Treat it as a checklist, not a prediction.</p></> },
+    { target: '.rside', placement: 'left', title: 'Paper trading', before: () => setRtab('trade'), body: <>
+      <p>Practise with <b>$100,000 of virtual money</b>: market, limit and stop orders, stop loss, take profit and trailing stops.</p>
+      <p>Open positions show live profit <b>after fees</b>, with a bar from your stop (left) to your target (right).</p></> },
+    { target: '.rtabs', placement: 'left', title: 'More tabs', before: () => setRtab('analysis'), body: <>
+      <p><b>Analysis</b>: what each pattern means, plus backtests. <b>Alerts</b>: price and pattern notifications. <b>Stats</b>: your results and a strategy tester that shows honestly whether a strategy worked.</p></> },
+    { target: '.ccysel', placement: 'bottom', title: 'Currency and theme', body: <>
+      <p>Show your account in USD, INR, EUR, GBP and more, converted at live rates. The sun and moon button switches between light and dark.</p></> },
+    { target: '.price', placement: 'bottom', title: 'Live status', body: <>
+      <p><b>LIVE</b> means prices are streaming. The clock counts down to the end of the current candle.</p>
+      <p><b>MARKET CLOSED</b>, <b>DELAYED</b> or <b>DEMO DATA</b> tell you when the data is not fresh.</p></> },
+    { title: "You're ready", placement: 'center', before: () => setRtab('advisor'), body: <>
+      <p>Try it: search <code>BTCUSDT</code>, open the <b>AI</b> tab, press <b>Send to paper ticket</b>, then watch your position in the <b>Trade</b> tab.</p>
+      <p>You can replay this tour any time with <b>? Tour</b> in the top bar.</p></> },
+  ], []);
+
+  const closeTour = useCallback(() => {
+    setTourOpen(false);
+    setRtab('advisor');
+    try { localStorage.setItem('tm-tour', 'done'); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (loading || !analysis) return;
+    try { if (localStorage.getItem('tm-tour')) return; } catch { return; }
+    const t = setTimeout(() => setTourOpen(true), 900);
+    return () => clearTimeout(t);
+  }, [loading, analysis]);
+
   const top = analysis?.charts[0], cd = analysis?.candles[0];
   const status = top ? (top.score >= 55 ? 'Forming' : top.score >= 35 ? 'Early sign of' : 'No clear chart pattern. Closest:') : '';
 
@@ -306,7 +365,7 @@ export default function App() {
         <div className="logo">Trade<b>Master</b></div>
         <SymbolSearch current={inst} onPick={setInst} />
         <button className="theme" title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>
-        <button className="theme" title="Browse stocks, forex, commodities, futures, options" onClick={() => setShowMarkets(true)}>▦ Markets</button>
+        <button className="theme" data-tour="markets" title="Browse stocks, forex, commodities, futures, options" onClick={() => setShowMarkets(true)}>▦ Markets</button>
         <div className="seg">
           {TFS.map(([l]) => <button key={l} className={l === tf ? 'on' : ''} onClick={() => setTf(l)}>{l}</button>)}
         </div>
@@ -317,10 +376,12 @@ export default function App() {
         <select className="ccysel" value={display} onChange={(e) => setDisplay(e.target.value)} title={fx.live ? `Live exchange rates, updated ${new Date(fx.updated).toLocaleTimeString()}` : 'Approximate offline exchange rates'}>
           {CURRENCIES.map((c) => <option key={c.code} value={c.code} title={c.name}>{c.code}</option>)}
         </select>
+        <button className="theme" title="Take the guided tour" onClick={() => setTourOpen(true)}>? Tour</button>
         <button className="theme" title="Toggle light / dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <LiveBar status={feed} demo={demo} px={price?.px ?? null} ch={price?.ch ?? null} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
       </header>
 
+      <Tour open={tourOpen} steps={tourSteps} onClose={closeTour} />
       {showMarkets && <Markets onPick={(i, t) => { setInst(i); if (t) setTf(t); }} onClose={() => setShowMarkets(false)} watch={watch} paper={paper} />}
 
       <div className="layout">

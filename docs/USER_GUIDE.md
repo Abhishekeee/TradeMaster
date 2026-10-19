@@ -33,6 +33,12 @@ Open **http://localhost:5173** in your browser (Chrome or Edge work best).
 
 Use `npm run dev` (not just opening a file). Stock, forex, futures and options data are fetched through small helper routes that only exist while the dev server is running. Crypto works anywhere.
 
+### Take the built-in tour
+
+The first time you open the app, a **guided tour** starts by itself. It dims the page and highlights each part of the screen in turn (search, markets, timeframes, pattern menu, drawing tools, AI advisor, paper trading and more) with a short explanation. Use **Next / Back** or the arrow keys, and **Esc** to leave. You can replay it any time with the **? Tour** button in the top bar.
+
+![Guided tour](screenshots/08-guided-tour.png)
+
 ---
 
 ## 2. A tour of the screen

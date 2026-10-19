@@ -55,6 +55,11 @@ Switch between dark and light themes, and between display currencies (USD, INR, 
 
 ![Light mode](docs/screenshots/07-light-mode.png)
 
+### Guided tour for new users
+A step-by-step tour opens on the first visit and highlights each part of the screen. Replay it any time with the **? Tour** button.
+
+![Guided tour](docs/screenshots/08-guided-tour.png)
+
 ## 🎯 Our Mission
 
 To simplify technical analysis by bringing charting tools, automated pattern recognition, AI-assisted insights, and strategy analytics into one convenient platform.

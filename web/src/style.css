@@ -286,3 +286,25 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .drawitem .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawitem .x { color: var(--down); font-weight: 700; }
 .drawitem .x:hover { background: var(--hover); }
+
+/* ---- guided tour ---- */
+.tour { position: fixed; inset: 0; z-index: 2000; }
+.tour-block { position: absolute; inset: 0; }
+.tour-dim { position: absolute; inset: 0; background: rgba(8, 10, 18, .7); }
+.tour-hole { position: fixed; border-radius: 8px; box-shadow: 0 0 0 100vmax rgba(8, 10, 18, .7); outline: 2px solid var(--blue); outline-offset: 0; pointer-events: none; transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }
+.tour-tip { position: fixed; max-width: calc(100vw - 20px); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .55); }
+.tour-step { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .6px; }
+.tour-tip h4 { margin: 4px 0 6px; font-size: 16px; }
+.tour-body { font-size: 13px; line-height: 1.5; }
+.tour-body p { margin: 0 0 8px; }
+.tour-body code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 12px; margin-right: 4px; }
+.tour-hint { color: var(--mute); font-size: 12px; }
+.tour-dots { display: flex; gap: 5px; margin: 10px 0 12px; }
+.tour-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.tour-dots i.seen { background: var(--mute); }
+.tour-dots i.on { background: var(--blue); width: 16px; border-radius: 3px; }
+.tour-actions { display: flex; align-items: center; gap: 8px; }
+.tour-btn { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; }
+.tour-btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+.tour-skip { background: none; border: 0; color: var(--mute); padding: 6px 2px; }
+.tour-skip:hover { color: var(--text); text-decoration: underline; }
