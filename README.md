@@ -14,6 +14,45 @@ TradeMaster is an interactive trading analysis platform for **crypto, stocks, fo
 - **Strategy Backtesting:** Evaluate historical trading signals, win rates, profit factors, and strategy performance.
 - **Customizable Workspace:** Switch between instruments, timeframes, chart styles, and analysis tools.
 
+## 📸 Screenshots
+
+> Screenshots use live market data and a demo paper-trading account with virtual money.
+
+### Live chart with pattern detection and the AI advisor
+Closest chart pattern, buy/sell candlestick signals, and a trade plan with entry, stop loss and targets drawn on the chart.
+
+![Chart and AI advisor](docs/screenshots/01-chart-ai-advisor.png)
+
+### Paper trading
+Open positions with a stop-to-target progress bar, live profit and loss after fees, and market, limit and stop orders.
+
+![Paper trading](docs/screenshots/02-paper-trading.png)
+
+### Indicators and drawing tools
+Bollinger Bands, VWAP, support/resistance levels, RSI and MACD panels, plus trend line and Fibonacci drawing tools.
+
+![Indicators and drawing tools](docs/screenshots/03-indicators-and-drawing-tools.png)
+
+### Market scanner
+Scan a whole market (crypto, stocks, forex, commodities) for the best chart patterns and AI setups on any timeframe.
+
+![Market scanner](docs/screenshots/04-market-scanner.png)
+
+### Performance stats and strategy tester
+Your paper-trading results, and a tester that replays the AI advisor on past candles with real stop and target exits, so you can see honestly whether a strategy worked.
+
+![Stats and strategy tester](docs/screenshots/05-stats-and-strategy-tester.png)
+
+### India (NSE) options chain
+Nifty, Bank Nifty and F&O stock option chains with a paper-trade ticket.
+
+![India options chain](docs/screenshots/06-india-options-chain.png)
+
+### Light mode
+Switch between dark and light themes, and between display currencies (USD, INR, EUR, GBP and more).
+
+![Light mode](docs/screenshots/07-light-mode.png)
+
 ## 🎯 Our Mission
 
 To simplify technical analysis by bringing charting tools, automated pattern recognition, AI-assisted insights, and strategy analytics into one convenient platform.

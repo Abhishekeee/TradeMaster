@@ -33,7 +33,7 @@ Thumbs.db
 desktop.ini
 
 # Local-only folders (not part of the app)
-screenshots/
+/screenshots/
 legacy/
 
 # Claude Code local files
