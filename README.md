@@ -37,3 +37,38 @@ TradeMaster is an analytical tool, not a financial advisor. Its signals and AI-g
 ---
 
 **Trade smarter. Analyze deeper. Trade with confidence.**
+
+## 📦 Getting Started
+
+The app lives in the `web/` folder (React + TypeScript + Vite, charts by [lightweight-charts](https://github.com/tradingview/lightweight-charts)).
+
+```bash
+cd web
+npm install
+npm run dev        # opens on http://localhost:5173
+```
+
+Requires Node.js 18 or newer. Other scripts: `npm run build` (type-check and production build) and `npm run preview`.
+
+> Stock, forex, futures and options data come through small proxy routes in `web/vite.config.ts`, so run the app with `npm run dev` (or `npm run preview`). Crypto data comes straight from Binance and works anywhere.
+
+### Project layout
+
+```
+web/
+  src/
+    App.tsx              main screen and live-data wiring
+    components/          chart, trade panel, AI advisor, scanner, stats, ...
+    engine/              pattern detection, AI advisor, backtest and strategy tester (runs in a Web Worker)
+    data.ts              Binance, Yahoo Finance and NSE data feeds
+    paper.ts             paper-trading account (orders, fees, trailing stops, P&L)
+    fx.ts                live currency conversion
+  vite.config.ts         dev-server proxies for Yahoo Finance and NSE data
+```
+
+### Also included
+
+- Paper trading with virtual money: market, limit and stop orders, stop loss, take profit, trailing stops and fees.
+- Strategy tester, performance stats, market scanner, price and pattern alerts, watchlist.
+- Drawing tools (trend line, horizontal line, Fibonacci), Bollinger Bands, VWAP, RSI, MACD and support/resistance levels.
+- Display currency switcher (USD, INR, EUR, GBP and more) with live exchange rates.
