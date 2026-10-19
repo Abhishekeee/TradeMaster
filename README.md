@@ -2,6 +2,8 @@
 
 TradeMaster is an interactive trading analysis platform for **crypto, stocks, forex, and other supported markets**. It combines interactive charts, automated pattern detection, technical indicators, AI-assisted insights, and historical strategy analytics to help traders make informed decisions.
 
+> 📖 **New here? Read the [User Guide](docs/USER_GUIDE.md)** for a tour of the screen and a first-10-minutes walkthrough.
+
 ## 🚀 Key Features
 
 - **Multi-Market Analysis:** Analyze cryptocurrencies, stocks, forex, and other supported instruments.
