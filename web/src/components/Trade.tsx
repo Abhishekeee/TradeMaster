@@ -175,6 +175,8 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const [slT, setSlT] = useState(false);           // the user has taken over the stop
   const [tpT, setTpT] = useState(false);           // ... and the target
   const [nonce, setNonce] = useState(0);
+  const [mode, setMode] = useState<'amount' | 'price'>(() => { try { return localStorage.getItem('tm-lvlmode') === 'price' ? 'price' : 'amount'; } catch { return 'amount'; } });
+  const pickMode = (m: 'amount' | 'price') => { setMode(m); try { localStorage.setItem('tm-lvlmode', m); } catch { /* ignore */ } };
   useEffect(() => { if (!closeAll) return; const t = setTimeout(() => setCloseAll(false), 3000); return () => clearTimeout(t); }, [closeAll]);
 
   useEffect(() => {
@@ -352,10 +354,25 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
 
         {note && <div className="note">{note}</div>}
 
-        <MoneyLevel kind="tp" entry={ref} value={tp} cur={cur} invested={parseFloat(amount) || 0}
-          onChange={(v) => { setTp(v); setTpT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
-        <MoneyLevel kind="sl" entry={ref} value={sl} cur={cur} invested={parseFloat(amount) || 0}
-          onChange={(v) => { setSl(v); setSlT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+        <div className="segc lvltabs" role="tablist">
+          <button role="tab" aria-selected={mode === 'amount'} className={mode === 'amount' ? 'on' : ''} onClick={() => pickMode('amount')}>Profit / loss amount</button>
+          <button role="tab" aria-selected={mode === 'price'} className={mode === 'price' ? 'on' : ''} onClick={() => pickMode('price')}>Target / stop price</button>
+        </div>
+        {mode === 'amount' ? (<>
+          <MoneyLevel kind="tp" entry={ref} value={tp} cur={cur} invested={parseFloat(amount) || 0}
+            onChange={(v) => { setTp(v); setTpT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+          <MoneyLevel kind="sl" entry={ref} value={sl} cur={cur} invested={parseFloat(amount) || 0}
+            onChange={(v) => { setSl(v); setSlT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+        </>) : (<>
+          <LevelEditor hideAmount kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
+            onChange={(v) => { setTp(v); setTpT(true); }}
+            onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
+            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+          <LevelEditor hideAmount kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
+            onChange={(v) => { setSl(v); setSlT(true); }}
+            onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
+            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+        </>)}
         {(trigBad || slBad || tpBad) && <div className="small down">{trigBad || slBad || tpBad}</div>}
 
         {amtUSD > 0 && (
@@ -382,14 +399,6 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
               <span className="igroup"><em>{ccy}</em><input inputMode="decimal" placeholder={price ? fmt(price * (below ? 0.99 : 1.01)) : ''} value={trigger} onChange={(e) => setTrigger(e.target.value)} /></span>
             </label>
           )}
-          <LevelEditor hideAmount kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
-            onChange={(v) => { setTp(v); setTpT(true); }}
-            onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
-            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
-          <LevelEditor hideAmount kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
-            onChange={(v) => { setSl(v); setSlT(true); }}
-            onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
-            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
           <label className="fld">Trailing stop (% behind the best price)
             <span className="igroup"><input inputMode="decimal" placeholder="e.g. 1.5" value={trail} onChange={(e) => setTrail(e.target.value)} /></span>
           </label>

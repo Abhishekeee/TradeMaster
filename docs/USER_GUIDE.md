@@ -126,9 +126,10 @@ In **Trade → New order** you only need four things:
 
 1. Choose **Buy** (you profit if the price rises) or **Sell (short)** (you profit if it falls).
 2. Enter **How much to invest** in your display currency, or tap a **% of cash** button.
-3. Enter **Sell when I make**: the profit you want, in money (for example ₹1,000). The app works out the price for you, and the trade closes by itself when that profit is reached. Tap a **% chip** to set it as a share of your investment.
-4. Enter **Stop if I lose**: the most you accept losing, in money. The trade closes by itself if that loss is reached.
-5. Press **Buy** or **Sell**.
+3. Set your exit with one of two tabs (they edit the same levels, so you can switch at any time, and the app remembers your choice):
+   - **Profit / loss amount**: type **Sell when I make** (the profit you want, for example ₹1,000) and **Stop if I lose** (the most you accept losing). The app works out the prices for you. Tap a **% chip** to set an amount as a share of your investment.
+   - **Target / stop price**: set the **Take profit** and **Stop loss** as prices, with a slider, **Tighter / Wider** buttons, presets (ATR multiples for the stop, 1R to 3R for the target; R = the distance to your stop), or by typing an exact price. **↺ suggest** restores the automatic value and **✕ none** removes a level.
+4. Press **Buy** or **Sell**. The trade closes by itself when the target or stop is reached.
 
 Both amounts are **after fees**. They are filled in with a sensible suggestion based on the market's recent volatility (stop 1.5× the typical candle range away, target 3× away) as soon as you enter an amount, so you can simply review them. Clear a box to trade without that level. Below the boxes you see the quantity, the share of your account you are risking, the profit and loss if each level is hit, and the reward-to-risk ratio.
 
@@ -138,7 +139,6 @@ Both levels also appear on the chart as dashed lines while you adjust them.
 
 Open **More options** for anything else:
 - **Limit** and **Stop** orders: trade only at a better price (a limit buy waits for the price to fall to your level) or when the price breaks through a level (a stop buy triggers when it rises to it). Pending orders appear under **Pending orders** and as orange lines on the chart, and you can cancel them at any time.
-- Fine-tune the target and stop as **prices**, with a slider, **Tighter / Wider** buttons and presets (ATR multiples for the stop, 1R to 3R for the target; R = the distance to your stop). **↺ suggest** restores the automatic value and **✕ none** removes a level.
 - **Trailing stop**: a stop that follows the price at a distance you choose and never moves backward.
 - **Risk per trade**: enter the share of your account you are willing to lose (many people use 1%) and press **Set amount from stop**. The amount is calculated so that being stopped out loses about that share of your equity.
 
