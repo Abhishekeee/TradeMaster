@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Cur } from '../fx';
 
 export interface PreviewLine { price: number; color: string; title: string; dashed?: boolean }
@@ -47,6 +48,21 @@ export default function LevelEditor({ kind, side, entry, value, onChange, onRese
   const stepPct = atrPct ? Math.max(0.05, +(atrPct * 0.25).toFixed(2)) : 0.25;
   const money = valid && rightSide ? result(n as number) : null;
 
+  // Set the level by money instead of price: the result is a straight line in the price, so two probes give the price
+  // at which the net profit (target) or net loss (stop, after fees) equals the amount typed.
+  const [amt, setAmt] = useState('');
+  const [typing, setTyping] = useState(false);
+  const fromAmount = (text: string) => {
+    setAmt(text);
+    const a = parseFloat(text);
+    if (!entry || !Number.isFinite(a) || a <= 0) return;
+    const p1 = entry * 1.01, f0 = result(entry), f1 = result(p1);
+    if (f0 === null || f1 === null || f1 === f0) return;
+    const lvl = entry + ((isSl ? -1 : 1) * cur.toUSD(a) - f0) / ((f1 - f0) / (p1 - entry));
+    if (lvl > 0 && Number.isFinite(lvl)) onChange(fmtPrice(lvl));
+  };
+  const shownAmt = typing ? amt : money !== null ? String(Math.round(Math.abs(cur.fromUSD(money)) * 100) / 100) : '';
+
   const setPct = (p: number) => {
     if (!entry) return;
     onChange(fmtPrice(level(kind, side, entry, Math.min(Math.max(p, 0.05), maxPct))));
@@ -77,6 +93,14 @@ export default function LevelEditor({ kind, side, entry, value, onChange, onRese
         <span className="igroup"><input inputMode="decimal" placeholder="none" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} /></span>
         <button type="button" className="lvl-step" disabled={!valid} onClick={() => setPct((distPct ?? shown) + stepPct)} title="Move further from the entry price">Wider</button>
       </div>
+
+      <label className="lvl-amt small">
+        <span>{isSl ? 'Max loss I accept' : 'Profit I want'} (after fees)</span>
+        <span className="igroup"><em>{cur.code}</em>
+          <input inputMode="decimal" placeholder={isSl ? 'e.g. 500' : 'e.g. 1000'} value={shownAmt} disabled={!entry}
+            onFocus={() => { setAmt(shownAmt); setTyping(true); }} onBlur={() => setTyping(false)}
+            onChange={(e) => fromAmount(e.target.value)} aria-label={isSl ? 'Loss amount' : 'Profit amount'} /></span>
+      </label>
 
       <input
         type="range" className={`lvl-range ${kind}`} min={0.05} max={maxPct} step={0.05}

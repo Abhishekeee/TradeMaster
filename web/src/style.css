@@ -336,3 +336,5 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .lvl-chips button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
 .autochk { margin-top: 10px; }
 .pedit2 { margin-top: 4px; }
+
+.lvl-amt { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; color: var(--mute); }
