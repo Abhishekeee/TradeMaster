@@ -16,6 +16,18 @@ export function suggestLevel(kind: 'sl' | 'tp', side: 'long' | 'short', entry: n
   return (kind === 'tp') === (side === 'long') ? entry + d : entry - d;
 }
 
+/**
+ * Price at which the net result equals `targetUSD` (positive for a profit, negative for a loss). The result is a straight
+ * line in the price, so two probes are enough to solve for it.
+ */
+export function levelForAmount(targetUSD: number, entry: number | null, result: (level: number) => number | null): number | null {
+  if (!entry) return null;
+  const p1 = entry * 1.01, f0 = result(entry), f1 = result(p1);
+  if (f0 === null || f1 === null || f1 === f0) return null;
+  const lvl = entry + (targetUSD - f0) / ((f1 - f0) / (p1 - entry));
+  return lvl > 0 && Number.isFinite(lvl) ? lvl : null;
+}
+
 const level = (kind: 'sl' | 'tp', side: 'long' | 'short', entry: number, pct: number) => {
   const up = (kind === 'tp') === (side === 'long');
   return entry * (1 + (up ? 1 : -1) * (pct / 100));
@@ -33,10 +45,11 @@ interface Props {
   cur: Cur;
   other?: number | null;                    // for a target: the stop level, so chips can offer 1R, 2R, 3R
   auto: boolean;                            // still showing the automatic suggestion
+  hideAmount?: boolean;                     // the amount box lives elsewhere (the simple ticket)
 }
 
 /** One stop-loss or take-profit control: price box, slider, tighter/wider buttons, presets and a live "if hit" figure. */
-export default function LevelEditor({ kind, side, entry, value, onChange, onReset, atr, result, cur, other, auto }: Props) {
+export default function LevelEditor({ kind, side, entry, value, onChange, onReset, atr, result, cur, other, auto, hideAmount }: Props) {
   const isSl = kind === 'sl';
   const label = isSl ? 'Stop loss' : 'Take profit';
   const n = value.trim() === '' ? null : parseFloat(value);
@@ -55,11 +68,9 @@ export default function LevelEditor({ kind, side, entry, value, onChange, onRese
   const fromAmount = (text: string) => {
     setAmt(text);
     const a = parseFloat(text);
-    if (!entry || !Number.isFinite(a) || a <= 0) return;
-    const p1 = entry * 1.01, f0 = result(entry), f1 = result(p1);
-    if (f0 === null || f1 === null || f1 === f0) return;
-    const lvl = entry + ((isSl ? -1 : 1) * cur.toUSD(a) - f0) / ((f1 - f0) / (p1 - entry));
-    if (lvl > 0 && Number.isFinite(lvl)) onChange(fmtPrice(lvl));
+    if (!Number.isFinite(a) || a <= 0) return;
+    const lvl = levelForAmount((isSl ? -1 : 1) * cur.toUSD(a), entry, result);
+    if (lvl !== null) onChange(fmtPrice(lvl));
   };
   const shownAmt = typing ? amt : money !== null ? String(Math.round(Math.abs(cur.fromUSD(money)) * 100) / 100) : '';
 
@@ -94,13 +105,13 @@ export default function LevelEditor({ kind, side, entry, value, onChange, onRese
         <button type="button" className="lvl-step" disabled={!valid} onClick={() => setPct((distPct ?? shown) + stepPct)} title="Move further from the entry price">Wider</button>
       </div>
 
-      <label className="lvl-amt small">
+      {!hideAmount && <label className="lvl-amt small">
         <span>{isSl ? 'Max loss I accept' : 'Profit I want'} (after fees)</span>
         <span className="igroup"><em>{cur.code}</em>
           <input inputMode="decimal" placeholder={isSl ? 'e.g. 500' : 'e.g. 1000'} value={shownAmt} disabled={!entry}
             onFocus={() => { setAmt(shownAmt); setTyping(true); }} onBlur={() => setTyping(false)}
             onChange={(e) => fromAmount(e.target.value)} aria-label={isSl ? 'Loss amount' : 'Profit amount'} /></span>
-      </label>
+      </label>}
 
       <input
         type="range" className={`lvl-range ${kind}`} min={0.05} max={maxPct} step={0.05}

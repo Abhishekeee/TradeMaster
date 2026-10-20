@@ -4,6 +4,7 @@ import type { Cur } from '../fx';
 import { costOf, exitFeeOf, feeInOf, FEE_DEFAULT, netPnl, pnlOf, type Position, type usePaper } from '../paper';
 import { usePrices } from '../priceStore';
 import { fmt, type Instrument } from '../types';
+import MoneyLevel from './MoneyLevel';
 import LevelEditor, { fmtPrice, suggestLevel, type PreviewLine } from './LevelEditor';
 
 type Paper = ReturnType<typeof usePaper>;
@@ -170,7 +171,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const [kind, setKind] = useState<'market' | 'limit' | 'stop'>('market');
   const [trigger, setTrigger] = useState('');
   const [trail, setTrail] = useState('');
-  const [auto, setAuto] = useState(true);          // suggest a stop and target automatically
+  const auto = true;                           // stop and target are suggested until the user takes over
   const [slT, setSlT] = useState(false);           // the user has taken over the stop
   const [tpT, setTpT] = useState(false);           // ... and the target
   const [nonce, setNonce] = useState(0);
@@ -333,68 +334,70 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       {/* 3. order ticket */}
       <h3>New order · {inst.id}</h3>
       <div className="card">
-        <div className="row"><b>{inst.id}</b><span><b>{price ? fmt(price) : '–'}</b> <span className="small">{ccy}</span></span></div>
-        {price && ccy !== cur.code && <div className="small" style={{ textAlign: 'right' }}>≈ {cur.money(price * fx)}</div>}
+        <div className="row"><b>{price ? fmt(price) : '–'} <span className="small">{ccy}</span></b>{price && ccy !== cur.code && <span className="small">≈ {cur.money(price * fx)}</span>}</div>
 
         <div className="segc">
-          <button className={long ? 'on buy' : ''} onClick={() => setSide('long')}>Buy / Long</button>
-          <button className={!long ? 'on sell' : ''} onClick={() => setSide('short')}>Sell / Short</button>
+          <button className={long ? 'on buy' : ''} onClick={() => setSide('long')}>Buy</button>
+          <button className={!long ? 'on sell' : ''} onClick={() => setSide('short')}>Sell (short)</button>
         </div>
 
-        <div className="segc three">
-          {(['market', 'limit', 'stop'] as const).map((k) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k === 'market' ? 'Market' : k === 'limit' ? 'Limit' : 'Stop'}</button>)}
-        </div>
-        {kind !== 'market' && (
-          <label className="fld">{kind === 'limit' ? (long ? 'Buy when price falls to' : 'Sell when price rises to') : (long ? 'Buy when price breaks above' : 'Sell when price breaks below')}
-            <span className="igroup"><em>{ccy}</em><input inputMode="decimal" placeholder={price ? fmt(price * (below ? 0.99 : 1.01)) : ''} value={trigger} onChange={(e) => setTrigger(e.target.value)} /></span>
-          </label>
-        )}
-
-        <label className="fld">Amount to invest
+        <label className="fld">How much to invest
           <span className="igroup"><em>{cur.code}</em><input inputMode="decimal" placeholder={plain(cur.fromUSD(10000))} value={amount} onChange={(e) => setAmount(e.target.value)} /></span>
         </label>
         <div className="chips" style={{ padding: '6px 0 0' }}>
-          {[10, 25, 50, 100].map((q) => (
+          {[25, 50, 100].map((q) => (
             <button key={q} onClick={() => setAmount(plain(cur.fromUSD((acc.cash / (1 + rate)) * (q / 100))))}>{q}% of cash</button>
           ))}
         </div>
 
         {note && <div className="note">{note}</div>}
 
-        <label className="chk autochk"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); if (e.target.checked) { setSlT(false); setTpT(false); setNonce((n) => n + 1); } }} /> Suggest stop loss and target automatically</label>
-        <LevelEditor kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
-          onChange={(v) => { setSl(v); setSlT(true); }}
-          onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
-          result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
-        <LevelEditor kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
-          onChange={(v) => { setTp(v); setTpT(true); }}
-          onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
-          result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
-        <label className="fld">Trailing stop (% behind the best price, optional)
-          <span className="igroup"><input inputMode="decimal" placeholder="e.g. 1.5" value={trail} onChange={(e) => setTrail(e.target.value)} /></span>
-        </label>
+        <MoneyLevel kind="tp" entry={ref} value={tp} cur={cur} invested={parseFloat(amount) || 0}
+          onChange={(v) => { setTp(v); setTpT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+        <MoneyLevel kind="sl" entry={ref} value={sl} cur={cur} invested={parseFloat(amount) || 0}
+          onChange={(v) => { setSl(v); setSlT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
         {(trigBad || slBad || tpBad) && <div className="small down">{trigBad || slBad || tpBad}</div>}
 
-        <details className="fold">
-          <summary>Size by risk</summary>
-          <div className="btctl">
-            <label className="fld" style={{ marginTop: 0 }}>Risk per trade (% of equity)<input inputMode="decimal" value={risk} onChange={(e) => setRisk(e.target.value)} /></label>
-            <button className="mini" style={{ alignSelf: 'flex-end' }} onClick={sizeByRisk}>Fill amount</button>
+        {amtUSD > 0 && (
+          <div className="preview">
+            <div><span>{mult > 1 ? 'Contracts' : 'Quantity'}</span><b>{qty ? qty.toPrecision(4) : '–'}</b></div>
+            <div><span>Risking</span><b>{lossUSD !== null && equity > 0 ? `${((lossUSD / equity) * 100).toFixed(1)}% of account` : '–'}</b></div>
+            <div><span>Target hit</span><b className="up">{gainUSD !== null ? `+${cur.money(gainUSD)}` : '–'}</b></div>
+            <div><span>Stop hit</span><b className="down">{lossUSD !== null ? `−${cur.money(lossUSD)}` : '–'}</b></div>
+            {lossUSD && gainUSD ? <div className="wide"><span>Reward : risk</span><b className={gainUSD / lossUSD >= 1.5 ? 'up' : 'down'}>{(gainUSD / lossUSD).toFixed(1)} : 1</b></div> : null}
           </div>
-          <div className="small">Needs a stop loss. The amount is set so that being stopped out loses that share of your equity.</div>
-        </details>
+        )}
+        <div className="small" style={{ marginTop: 4 }}>Amounts are after fees. The trade closes by itself when the target or stop is reached.</div>
 
-        <div className="small" style={{ marginTop: 8 }}>Price must move about {(rate * 200).toFixed(2)}% in your favour just to cover fees.</div>
-        <div className="preview">
-          <div><span>{mult > 1 ? 'Contracts' : 'Quantity'}</span><b>{qty ? qty.toPrecision(4) : '–'}</b></div>
-          <div><span>Fees in + out ({(rate * 100).toFixed(2)}% each)</span><b>{amtUSD ? cur.money(amtUSD * rate * 2) : '–'}</b></div>
-          <div><span>If stopped (after fees)</span><b className="down">{lossUSD !== null ? `−${cur.money(lossUSD)}` : '–'}</b></div>
-          <div><span>If target hit (after fees)</span><b className="up">{gainUSD !== null ? `+${cur.money(gainUSD)}` : '–'}</b></div>
-          {lossUSD && gainUSD ? <div className="wide"><span>Reward : risk</span><b>{(gainUSD / lossUSD).toFixed(1)} : 1</b></div> : null}
-        </div>
-
-        <button className={`act ${long ? 'buyact' : 'sellact'}`} onClick={place}>{kind === 'market' ? `${long ? 'Buy' : 'Sell'} ${inst.id} at market` : `Place ${kind} ${long ? 'buy' : 'sell'}${trigN !== undefined ? ` at ${fmt(trigN)}` : ''}`}</button>
+        <button className={`act ${long ? 'buyact' : 'sellact'}`} onClick={place}>{kind === 'market' ? `${long ? 'Buy' : 'Sell'} ${inst.id}` : `Place ${kind} ${long ? 'buy' : 'sell'}${trigN !== undefined ? ` at ${fmt(trigN)}` : ''}`}</button>
         {msg && <div className={`small ${msg.ok ? 'up' : 'down'}`} style={{ marginTop: 6 }}>{msg.t}</div>}
+
+        <details className="fold">
+          <summary>More options</summary>
+          <div className="segc three">
+            {(['market', 'limit', 'stop'] as const).map((k) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k === 'market' ? 'Market' : k === 'limit' ? 'Limit' : 'Stop'}</button>)}
+          </div>
+          {kind !== 'market' && (
+            <label className="fld">{kind === 'limit' ? (long ? 'Buy when price falls to' : 'Sell when price rises to') : (long ? 'Buy when price breaks above' : 'Sell when price breaks below')}
+              <span className="igroup"><em>{ccy}</em><input inputMode="decimal" placeholder={price ? fmt(price * (below ? 0.99 : 1.01)) : ''} value={trigger} onChange={(e) => setTrigger(e.target.value)} /></span>
+            </label>
+          )}
+          <LevelEditor hideAmount kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
+            onChange={(v) => { setTp(v); setTpT(true); }}
+            onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
+            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+          <LevelEditor hideAmount kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
+            onChange={(v) => { setSl(v); setSlT(true); }}
+            onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
+            result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+          <label className="fld">Trailing stop (% behind the best price)
+            <span className="igroup"><input inputMode="decimal" placeholder="e.g. 1.5" value={trail} onChange={(e) => setTrail(e.target.value)} /></span>
+          </label>
+          <div className="btctl">
+            <label className="fld" style={{ marginTop: 0 }}>Risk per trade (% of account)<input inputMode="decimal" value={risk} onChange={(e) => setRisk(e.target.value)} /></label>
+            <button className="mini" style={{ alignSelf: 'flex-end' }} onClick={sizeByRisk}>Set amount from stop</button>
+          </div>
+        </details>
       </div>
 
       {/* 4. history */}
@@ -417,7 +420,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
           </tbody></table>
         ) : <span className="small">Closed trades will appear here.</span>}
       </div>
-      <p className="disc">Paper trading uses virtual money and live prices. Stock prices can be delayed, there is no slippage, and real trading results will differ. Currency conversion uses live market rates, so a position's profit includes the exchange-rate move.</p>
+      <p className="disc">Paper trading with virtual money and live prices. Real trading results will differ.</p>
     </aside>
   );
 }

@@ -338,3 +338,8 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .pedit2 { margin-top: 4px; }
 
 .lvl-amt { display: flex; flex-direction: column; gap: 3px; margin: 6px 0; color: var(--mute); }
+.mlvl { margin-top: 10px; }
+.mlvl label { display: flex; flex-direction: column; gap: 3px; color: var(--mute); font-size: 12px; }
+.mlvl.tp label > span:first-child { color: #26a69a; }
+.mlvl.sl label > span:first-child { color: #ef5350; }
+.mlvl .lvl-chips { margin-top: 4px; }
