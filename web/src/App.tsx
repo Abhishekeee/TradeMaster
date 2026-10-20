@@ -17,7 +17,7 @@ import Markets from './components/Markets';
 import { usePaper, netPnl } from './paper';
 import { CURRENCIES, makeCurrency, useFx } from './fx';
 import SymbolSearch from './components/SymbolSearch';
-import { currencyOf, demoData, fetchCandles, openFeed, openTicks, type FeedStatus } from './data';
+import { currencyOf, demoData, fetchCandles, fetchHistory, openFeed, openTicks, type FeedStatus } from './data';
 import { setPrice as pushPrice } from './priceStore';
 import LiveBar from './components/LiveBar';
 import { runAnalysis, runBacktest, runStrategy } from './engine/client';
@@ -173,13 +173,13 @@ export default function App() {
     try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display })); } catch { /* ignore */ }
   }, [theme, inst, tf, display]);
 
-  // the advisor judges a setup by how that pattern performed here before (backtest on up to 1000 candles)
+  // the advisor judges a setup by how that pattern performed here before (backtest on up to 5000 candles)
   useEffect(() => {
     if (loading) return;
     let dead = false;
     setBt(null); setStrat(null);
     (async () => {
-      const data = demo ? candles.current : (await fetchCandles(inst, tf, 1000)) ?? candles.current;
+      const data = demo ? candles.current : (await fetchHistory(inst, tf)) ?? candles.current;
       const r = await runBacktest(data, 20, 55, () => undefined);
       if (!dead) setBt(r);
       const st = await runStrategy(data, { target: 'tp1', minConf: 50, tf }, () => undefined);
@@ -206,7 +206,7 @@ export default function App() {
   const advice: Advice | null = useMemo(() => {
     const c = candles.current;
     if (!analysis || c.length < 60) return null;
-    const base = advise(c.slice(-500), analysis, bt, { tf, isOption: inst.kind === 'OPTION', step: inst.id === '^NSEI' ? 50 : inst.id === '^NSEBANK' ? 100 : undefined }) as Advice;
+    const base = advise(c.slice(-500), analysis, bt, { tf, strat, isOption: inst.kind === 'OPTION', step: inst.id === '^NSEI' ? 50 : inst.id === '^NSEBANK' ? 100 : undefined }) as Advice;
     if (!htf || base.action === 'WAIT') return base;
     // trading with the higher timeframe is safer than trading against it
     const dir = base.action === 'BUY' ? 1 : -1;
@@ -218,9 +218,9 @@ export default function App() {
       reasons: agrees ? [...base.reasons, `Higher timeframe (${htf.tf}) agrees: ${htf.label}`] : base.reasons,
       warnings: against ? [`Higher timeframe (${htf.tf}) is ${htf.label}, so this trade goes against the bigger trend.`, ...base.warnings] : base.warnings,
     };
-    if (conf < 35) { out.action = 'WAIT'; out.sl = out.tp1 = out.tp2 = null; out.option = null; out.warnings = ['Setup is too weak once the higher timeframe is taken into account.', ...out.warnings]; }
+    if (conf < 50) { out.action = 'WAIT'; out.sl = out.tp1 = out.tp2 = null; out.option = null; out.warnings = ['Setup is too weak once the higher timeframe is taken into account.', ...out.warnings]; }
     return out;
-  }, [analysis, bt, tf, inst, htf]);
+  }, [analysis, bt, strat, tf, inst, htf]);
 
   // average candle range over the last 50 candles: the basis for suggesting a stop loss and target
   const atr = useMemo(() => {
@@ -312,12 +312,12 @@ export default function App() {
   }, [inst, demo]);
 
   const strategy = useCallback(async (target: 'tp1' | 'tp2', minConf: number, onProgress: (p: number) => void) => {
-    const data = demo ? candles.current : (await fetchCandles(inst, tf, 1000)) ?? candles.current;
+    const data = demo ? candles.current : (await fetchHistory(inst, tf)) ?? candles.current;
     return runStrategy(data, { target, minConf, tf }, onProgress);
   }, [inst, tf, demo]);
 
   const backtest = useCallback(async (h: number, min: number, onProgress: (p: number) => void) => {
-    const data = demo ? demoData(tf) : (await fetchCandles(inst, tf, 1000)) ?? candles.current;
+    const data = demo ? demoData(tf) : (await fetchHistory(inst, tf)) ?? candles.current;
     return runBacktest(data, h, min, onProgress);
   }, [inst, tf, demo]);
 

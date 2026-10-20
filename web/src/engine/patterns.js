@@ -602,6 +602,7 @@ const global = {};
   const strikeStep = (p) => (p < 25 ? 0.5 : p < 50 ? 1 : p < 100 ? 2.5 : p < 500 ? 5 : p < 2000 ? 10 : p < 10000 ? 50 : 100);
   const expiryHint = (tf) => ({ '1m': 'nearest weekly (0-7 days)', '5m': 'nearest weekly (0-7 days)', '15m': 'nearest weekly (0-7 days)', '1h': '1-2 weeks out', '4h': '2-3 weeks out', '1D': '3-6 weeks out', '1W': '2-3 months out' }[tf] || '1-3 weeks out');
 
+  const MIN_CONF = 50;
   function advise(cs, a, bt, opt) {
     opt = opt || {};
     const n = cs.length;
@@ -656,7 +657,7 @@ const global = {};
     if (stat && stat.n > 0) {
       history = { name: top.name, n: stat.n, winRate: stat.winRate, edge: stat.edge, avgRet: stat.avgRet };
       if (stat.n >= 10) {
-        conf += stat.edge >= 10 ? 20 : stat.edge >= 3 ? 10 : stat.edge <= -5 ? -15 : 0;
+        conf += stat.edge >= 10 ? 20 : stat.edge >= 3 ? 10 : stat.edge <= -5 ? -15 : stat.n >= 30 && stat.edge <= 0 ? -10 : 0;
         if (stat.edge <= -5) warnings.push('In the past, ' + top.name + ' lost to a blind guess on this symbol and timeframe (' + stat.winRate.toFixed(0) + '% win, ' + stat.n + ' trades).');
       } else warnings.push('Only ' + stat.n + ' past ' + top.name + ' trades here: too few to trust the track record.');
     } else if (patOk) warnings.push('No track record for ' + top.name + ' on this symbol and timeframe yet.');
@@ -664,7 +665,20 @@ const global = {};
     conf = Math.round(clamp(conf, 0, 100));
 
     let action = dir > 0 ? 'BUY' : dir < 0 ? 'SELL' : 'WAIT';
-    if (action !== 'WAIT' && conf < 35) { warnings.unshift('Setup is too weak to act on (confidence ' + conf + '%).'); action = 'WAIT'; }
+    if (action !== 'WAIT' && conf < MIN_CONF) { warnings.unshift('Setup is too weak to act on (confidence ' + conf + '%).'); action = 'WAIT'; }
+
+    // evidence gate: the advisor only trades when this symbol and timeframe have actually paid off in the past
+    const ev = opt.strat;
+    if (action !== 'WAIT' && ev === null) warnings.unshift('Still checking this setup against past trades. Wait for the check before acting.');
+    if (action !== 'WAIT' && ev) {
+      const recent = ev.recentN >= 8 ? ev.recentAvgR : null;
+      if (ev.n < 20) { conf = Math.min(conf, 55); warnings.unshift('Only ' + ev.n + ' past trades of this kind on this symbol and timeframe: unproven, so confidence is capped.'); }
+      else if (ev.avgR <= 0 || ev.profitFactor < 1) { action = 'WAIT'; warnings.unshift('Past signals lost money here after fees (' + ev.n + ' trades, profit factor ' + ev.profitFactor.toFixed(2) + '). No trade until this changes.'); }
+      else if (recent !== null && recent < 0) { action = 'WAIT'; warnings.unshift('The strategy made money overall but has been losing lately (last ' + ev.recentN + ' trades averaged ' + recent.toFixed(2) + 'R). No trade for now.'); }
+      else if (ev.profitFactor < 1.15) { conf = Math.min(conf, 55); warnings.unshift('Past results are only marginally profitable (profit factor ' + ev.profitFactor.toFixed(2) + ').'); }
+      else reasons.push('Backtest: ' + ev.n + ' past trades, ' + ev.winRate.toFixed(0) + '% won, profit factor ' + ev.profitFactor.toFixed(2) + ' after fees');
+      conf = Math.round(clamp(conf, 0, 100));
+    }
     if (action !== 'WAIT' && !patOk && !cand) { warnings.unshift('Direction comes from trend alone with no pattern or candle confirmation.'); }
 
     let option = null;
@@ -734,6 +748,9 @@ const global = {};
       if (opt.onProgress) opt.onProgress(i / cs.length);
     }
     const n = trades.length;
+    const tail = trades.slice(-Math.max(8, Math.round(n * 0.3)));      // newest ~30% of trades: has the edge faded?
+    const recentN = n >= 16 ? tail.length : 0;
+    const recentAvgR = recentN ? tail.reduce((s, t) => s + t.r, 0) / recentN : 0;
     const wins = trades.filter((t) => t.r > 0);
     const losses = trades.filter((t) => t.r <= 0);
     const sumW = wins.reduce((s, t) => s + t.r, 0), sumL = Math.abs(losses.reduce((s, t) => s + t.r, 0));
@@ -746,7 +763,7 @@ const global = {};
       curve.push({ t: t.exitTime, v: eq * 100 });
     });
     return {
-      trades, curve, n, from: cs[warm].time, to: cs[cs.length - 1].time,
+      trades, curve, n, recentN, recentAvgR, from: cs[warm].time, to: cs[cs.length - 1].time,
       winRate: n ? (100 * wins.length) / n : 0,
       avgR: n ? trades.reduce((s, t) => s + t.r, 0) / n : 0,
       profitFactor: sumL ? sumW / sumL : sumW ? Infinity : 0,

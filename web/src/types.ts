@@ -39,5 +39,5 @@ export interface StrategyOpts { target: 'tp1' | 'tp2'; minConf: number; tf: stri
 export interface StrategyTrade { time: number; exitTime: number; dir: number; entry: number; exit: number; sl: number; tp: number; reason: 'stop' | 'target' | 'time'; r: number; pct: number; conf: number; setup: string | null }
 export interface StrategyResult {
   trades: StrategyTrade[]; curve: { t: number; v: number }[]; n: number; from: number; to: number;
-  winRate: number; avgR: number; profitFactor: number; returnPct: number; maxDrawdown: number; buyHold: number; stops: number; targets: number;
+  recentN: number; recentAvgR: number; winRate: number; avgR: number; profitFactor: number; returnPct: number; maxDrawdown: number; buyHold: number; stops: number; targets: number;
 }

@@ -7,16 +7,27 @@ export const API: string = ((import.meta.env.VITE_API_BASE as string | undefined
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com'];
 const BINANCE_IV: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w' };
 
-async function binanceCandles(symbol: string, tf: string, limit: number): Promise<Candle[] | null> {
+async function binancePage(symbol: string, tf: string, limit: number, endTime?: number): Promise<Candle[] | null> {
   for (const h of HOSTS) {
     try {
-      const r = await fetch(`${h}/api/v3/klines?symbol=${symbol}&interval=${BINANCE_IV[tf]}&limit=${limit}`);
+      const r = await fetch(`${h}/api/v3/klines?symbol=${symbol}&interval=${BINANCE_IV[tf]}&limit=${limit}${endTime ? `&endTime=${endTime}` : ''}`);
       if (!r.ok) continue;
       const j = await r.json();
       if (Array.isArray(j) && j.length) return j.map((k: string[] & number[]) => ({ time: Math.floor(+k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
     } catch { /* try next host */ }
   }
   return null;
+}
+
+/** Binance returns at most 1000 candles per call, so longer histories are fetched page by page, walking backwards in time. */
+async function binanceCandles(symbol: string, tf: string, limit: number): Promise<Candle[] | null> {
+  let out = (await binancePage(symbol, tf, Math.min(limit, 1000))) ?? null;
+  while (out && out.length < limit) {
+    const older = await binancePage(symbol, tf, Math.min(limit - out.length, 1000), out[0].time * 1000 - 1);
+    if (!older) break;
+    out = older.concat(out);
+  }
+  return out;
 }
 
 /* ---------------------------------------------------------------- Yahoo Finance (stocks, ETFs, forex, indices)
@@ -37,13 +48,13 @@ export function currencyOf(inst: Instrument): string {
 }
 
 const YAHOO: Record<string, { iv: string; range: string; agg?: number }> = {
-  '1m': { iv: '1m', range: '5d' },
-  '5m': { iv: '5m', range: '1mo' },
-  '15m': { iv: '15m', range: '1mo' },
+  '1m': { iv: '1m', range: '7d' },
+  '5m': { iv: '5m', range: '60d' },
+  '15m': { iv: '15m', range: '60d' },
   '1h': { iv: '60m', range: '1y' },
   '4h': { iv: '60m', range: '2y', agg: 14400 },
-  '1D': { iv: '1d', range: '5y' },
-  '1W': { iv: '1wk', range: '10y' },
+  '1D': { iv: '1d', range: '10y' },
+  '1W': { iv: '1wk', range: '20y' },
 };
 
 function aggregate(c: Candle[], size: number): Candle[] {
@@ -89,8 +100,11 @@ async function yahooCandles(symbol: string, tf: string, limit: number): Promise<
 
 export async function fetchCandles(inst: Instrument, tf: string, limit = 500): Promise<Candle[] | null> {
   if (inst.source === 'nse') return null; // NSE contracts have no price history feed
-  return inst.source === 'binance' ? binanceCandles(inst.id, tf, Math.min(limit, 1000)) : yahooCandles(inst.id, tf, limit);
+  return inst.source === 'binance' ? binanceCandles(inst.id, tf, limit) : yahooCandles(inst.id, tf, limit);
 }
+
+/** Longest history available, used to backtest. More trades means a more trustworthy win rate. */
+export const fetchHistory = (inst: Instrument, tf: string) => fetchCandles(inst, tf, 5000);
 
 /* ---------------------------------------------------------------- symbol search */
 const CRYPTO = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'TRXUSDT', 'DOTUSDT', 'LTCUSDT', 'MATICUSDT', 'SHIBUSDT', 'TONUSDT', 'NEARUSDT', 'ATOMUSDT', 'UNIUSDT', 'PEPEUSDT', 'SUIUSDT'];
