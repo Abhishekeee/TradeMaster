@@ -99,4 +99,4 @@ function optionsPlugin(): Plugin {
   };
 }
 
-export default defineConfig({ plugins: [react(), optionsPlugin()], worker: { format: 'es' }, server: { proxy }, preview: { proxy } });
+export default defineConfig({ base: process.env.VITE_BASE ?? '/', plugins: [react(), optionsPlugin()], worker: { format: 'es' }, server: { proxy }, preview: { proxy } });

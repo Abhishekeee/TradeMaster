@@ -1,5 +1,8 @@
 import { TF_SEC, type Candle, type Instrument, type Quote } from './types';
 
+/** Base URL of the API proxy; empty in dev (Vite serves /api), set at build time for static hosting. */
+export const API: string = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');
+
 /* ---------------------------------------------------------------- Binance (crypto) */
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com'];
 const BINANCE_IV: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w' };
@@ -62,7 +65,7 @@ const YAHOO_POLL_RANGE: Record<string, string> = { '1m': '1d', '5m': '1d', '15m'
 async function yahooRaw(symbol: string, tf: string, range: string): Promise<{ candles: Candle[]; marketTime: number } | null> {
   const m = YAHOO[tf];
   try {
-    const r = await fetch(`/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${m.iv}&range=${range}&includePrePost=false`);
+    const r = await fetch(`${API}/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${m.iv}&range=${range}&includePrePost=false`);
     if (!r.ok) return null;
     const res = (await r.json())?.chart?.result?.[0];
     const q = res?.indicators?.quote?.[0];
@@ -98,7 +101,7 @@ export async function searchInstruments(query: string): Promise<Instrument[]> {
   const out: Instrument[] = CRYPTO.filter((s) => s.startsWith(q) || s.replace('USDT', '').startsWith(q))
     .slice(0, 4).map((s) => ({ id: s, name: 'Crypto · Binance', source: 'binance' as const, kind: 'CRYPTO' }));
   try {
-    const r = await fetch(`/api/yahoo-search/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`);
+    const r = await fetch(`${API}/api/yahoo-search/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`);
     if (r.ok) {
       const j = await r.json();
       for (const x of j.quotes ?? []) {
@@ -143,7 +146,7 @@ export async function fetchLivePrices(insts: Instrument[]): Promise<Record<strin
   if (y.length) {
     jobs.push((async () => {
       try {
-        const r = await fetch(`/api/quote?symbols=${encodeURIComponent(y.map((i) => i.id).join(','))}`);
+        const r = await fetch(`${API}/api/quote?symbols=${encodeURIComponent(y.map((i) => i.id).join(','))}`);
         if (!r.ok) return;
         for (const q of (await r.json()).quoteResponse?.result ?? []) {
           if (typeof q.regularMarketPrice === 'number') out[q.symbol] = { price: q.regularMarketPrice, time: q.regularMarketTime ?? 0, state: q.marketState ?? '' };
@@ -313,7 +316,7 @@ const quoteCache = new Map<string, { at: number; q: Quote }>();
 
 async function yahooQuote(symbol: string): Promise<Quote | null> {
   try {
-    const r = await fetch(`/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`);
+    const r = await fetch(`${API}/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`);
     if (!r.ok) return null;
     const res = (await r.json())?.chart?.result?.[0];
     const closes: number[] = (res?.indicators?.quote?.[0]?.close ?? []).filter((x: number | null) => x != null);
@@ -356,7 +359,7 @@ export interface OptionChain { underlying: string; price: number; expirations: n
 
 export async function fetchOptions(symbol: string, date?: number): Promise<OptionChain | null> {
   try {
-    const r = await fetch(`/api/options?symbol=${encodeURIComponent(symbol)}${date ? `&date=${date}` : ''}`);
+    const r = await fetch(`${API}/api/options?symbol=${encodeURIComponent(symbol)}${date ? `&date=${date}` : ''}`);
     if (!r.ok) return null;
     const res = (await r.json())?.optionChain?.result?.[0];
     const o = res?.options?.[0];
@@ -380,7 +383,7 @@ export async function fetchNseChain(symbol: string, type: 'Indices' | 'Equity', 
   const hit = nseCache.get(key);
   if (hit && Date.now() - hit.at < 10000) return hit.c;
   try {
-    const r = await fetch(`/api/nse?symbol=${encodeURIComponent(symbol)}&type=${type}${expiry ? `&expiry=${encodeURIComponent(expiry)}` : ''}`);
+    const r = await fetch(`${API}/api/nse?symbol=${encodeURIComponent(symbol)}&type=${type}${expiry ? `&expiry=${encodeURIComponent(expiry)}` : ''}`);
     if (!r.ok) return null;
     const j = await r.json();
     const rec = j?.records;

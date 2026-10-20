@@ -1,0 +1,7 @@
+name = "trademaster-api"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+[vars]
+# Comma-separated list of sites allowed to call this API
+ALLOWED_ORIGINS = "https://abhishekeee.github.io,http://localhost:5173,http://localhost:4173"

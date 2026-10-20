@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { API } from './data';
 
 export interface Currency { code: string; name: string }
 export const CURRENCIES: Currency[] = [
@@ -18,7 +19,7 @@ const scale = (code: string) => (code === 'GBp' || code === 'GBX' ? 0.01 : 1);
 
 async function fetchRate(code: string): Promise<number | null> {
   try {
-    const r = await fetch(`/api/yahoo/v8/finance/chart/USD${code}=X?interval=1d&range=1d`);
+    const r = await fetch(`${API}/api/yahoo/v8/finance/chart/USD${code}=X?interval=1d&range=1d`);
     if (!r.ok) return null;
     const p = (await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice;
     return typeof p === 'number' && p > 0 ? p : null;
