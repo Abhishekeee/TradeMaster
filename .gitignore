@@ -38,3 +38,6 @@ legacy/
 
 # Claude Code local files
 .claude/
+
+# Wrangler local state
+.wrangler/
