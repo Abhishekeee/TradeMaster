@@ -268,6 +268,40 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
 
   return (
     <aside className="panel">
+      {/* open trades come first, and only when there are any */}
+      {acc.positions.length > 0 && (<>
+      <div className="sechead">
+        <h3>Open positions ({acc.positions.length})</h3>
+        {acc.positions.length > 1 && (
+          <button className={`mini ${closeAll ? 'danger' : ''}`} onClick={() => {
+            if (!closeAll) { setCloseAll(true); return; }
+            acc.positions.forEach((p) => paper.close(p.id, last(p.inst.id, p.entry)));
+            setCloseAll(false);
+          }}>{closeAll ? 'Confirm: close all' : 'Close all'}</button>
+        )}
+      </div>
+      {acc.positions.map((p) => (
+        <PositionCard key={p.id} p={p} px={last(p.inst.id, p.entry)} cur={cur} paper={paper} onOpen={onOpen} atr={p.inst.id === inst.id ? atr : null} viewed={p.inst.id === inst.id} onPreview={onPreview} />
+      ))}
+      </>)}
+
+      {(acc.orders ?? []).length > 0 && (<>
+        <h3>Pending orders ({(acc.orders ?? []).length})</h3>
+        {(acc.orders ?? []).map((o) => {
+          const px = last(o.inst.id, o.trigger);
+          const away = ((o.trigger - px) / px) * 100;
+          return (
+            <div key={o.id} className="card order">
+              <div className="row">
+                <span><b>{o.inst.id}</b> <span className={`badge ${o.side === 'long' ? 'up' : 'down'}`}>{o.kind.toUpperCase()} {o.side === 'long' ? 'BUY' : 'SELL'}</span></span>
+                <button className="mini" onClick={() => paper.cancelOrder(o.id)}>Cancel</button>
+              </div>
+              <div className="small">Triggers at <b>{fmt(o.trigger)}</b> ({away >= 0 ? '+' : '−'}{Math.abs(away).toFixed(2)}% from now) · {cur.money(o.amountUSD)}{o.sl !== undefined ? ` · SL ${fmt(o.sl)}` : ''}{o.tp !== undefined ? ` · TP ${fmt(o.tp)}` : ''}{o.trail ? ` · trail ${o.trail}%` : ''}</div>
+            </div>
+          );
+        })}
+      </>)}
+
       {/* 1. order ticket first: it is what people come here to use */}
       <h3>New order · {inst.id}</h3>
       <div className="card">
@@ -377,38 +411,6 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
           <div className="small">Applies to new trades. The account is kept in US dollars and shown in {cur.code} at the live rate.</div>
         </details>
       </div>
-
-      {/* 3. open positions: this is what people come back to check */}
-      <div className="sechead">
-        <h3>Open positions ({acc.positions.length})</h3>
-        {acc.positions.length > 1 && (
-          <button className={`mini ${closeAll ? 'danger' : ''}`} onClick={() => {
-            if (!closeAll) { setCloseAll(true); return; }
-            acc.positions.forEach((p) => paper.close(p.id, last(p.inst.id, p.entry)));
-            setCloseAll(false);
-          }}>{closeAll ? 'Confirm: close all' : 'Close all'}</button>
-        )}
-      </div>
-      {acc.positions.length ? acc.positions.map((p) => (
-        <PositionCard key={p.id} p={p} px={last(p.inst.id, p.entry)} cur={cur} paper={paper} onOpen={onOpen} atr={p.inst.id === inst.id ? atr : null} viewed={p.inst.id === inst.id} onPreview={onPreview} />
-      )) : <div className="empty">No open positions yet.<br /><span className="small">Place an order above, or use “Trade this setup” in the Analysis tab.</span></div>}
-
-      {(acc.orders ?? []).length > 0 && (<>
-        <h3>Pending orders ({(acc.orders ?? []).length})</h3>
-        {(acc.orders ?? []).map((o) => {
-          const px = last(o.inst.id, o.trigger);
-          const away = ((o.trigger - px) / px) * 100;
-          return (
-            <div key={o.id} className="card order">
-              <div className="row">
-                <span><b>{o.inst.id}</b> <span className={`badge ${o.side === 'long' ? 'up' : 'down'}`}>{o.kind.toUpperCase()} {o.side === 'long' ? 'BUY' : 'SELL'}</span></span>
-                <button className="mini" onClick={() => paper.cancelOrder(o.id)}>Cancel</button>
-              </div>
-              <div className="small">Triggers at <b>{fmt(o.trigger)}</b> ({away >= 0 ? '+' : '−'}{Math.abs(away).toFixed(2)}% from now) · {cur.money(o.amountUSD)}{o.sl !== undefined ? ` · SL ${fmt(o.sl)}` : ''}{o.tp !== undefined ? ` · TP ${fmt(o.tp)}` : ''}{o.trail ? ` · trail ${o.trail}%` : ''}</div>
-            </div>
-          );
-        })}
-      </>)}
 
       {/* 4. history */}
       <div className="sechead">
