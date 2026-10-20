@@ -131,7 +131,7 @@ In **Trade → New order** you only need four things:
    - **Target / stop price**: set the **Take profit** and **Stop loss** as prices, with a slider, **Tighter / Wider** buttons, presets (ATR multiples for the stop, 1R to 3R for the target; R = the distance to your stop), or by typing an exact price. **↺ suggest** restores the automatic value and **✕ none** removes a level.
 4. Press **Buy** or **Sell**. The trade closes by itself when the target or stop is reached.
 
-Both amounts are **after fees**. They are filled in with a sensible suggestion based on the market's recent volatility (stop 1.5× the typical candle range away, target 3× away) as soon as you enter an amount, so you can simply review them. Clear a box to trade without that level. Below the boxes you see the quantity, the share of your account you are risking, the profit and loss if each level is hit, and the reward-to-risk ratio.
+Both amounts are **after fees**, and they stay exactly what you typed: while you set up the order, the target and stop price move with the market, and they are measured from the price you actually get filled at. (Levels you type as an exact price stay put.) They are filled in with a sensible suggestion based on the market's recent volatility (stop 1.5× the typical candle range away, target 3× away) as soon as you enter an amount, so you can simply review them. Clear a box to trade without that level. Below the boxes you see the quantity, the share of your account you are risking, the profit and loss if each level is hit, and the reward-to-risk ratio.
 
 Both levels also appear on the chart as dashed lines while you adjust them.
 

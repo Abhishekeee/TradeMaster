@@ -6,7 +6,7 @@ import { costOf, exitFeeOf, feeInOf, FEE_DEFAULT, netPnl, pnlOf, type Closed, ty
 import { usePrices } from '../priceStore';
 import { fmt, type Instrument } from '../types';
 import MoneyLevel from './MoneyLevel';
-import LevelEditor, { fmtPrice, suggestLevel, type PreviewLine } from './LevelEditor';
+import LevelEditor, { fmtPrice, levelForAmount, suggestLevel, type PreviewLine } from './LevelEditor';
 
 type Paper = ReturnType<typeof usePaper>;
 export interface Prefill { side: 'long' | 'short'; sl: number; tp: number; note: string; nonce: number }
@@ -176,6 +176,10 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const auto = true;                           // stop and target are suggested until the user takes over
   const [slT, setSlT] = useState(false);           // the user has taken over the stop
   const [tpT, setTpT] = useState(false);           // ... and the target
+  // Money the user asked to win or lose (display currency). While set, the price levels are recomputed from the entry
+  // price, so "lose 500" stays 500 however the price moves before the order is placed.
+  const [slAmt, setSlAmt] = useState<number | null>(null);
+  const [tpAmt, setTpAmt] = useState<number | null>(null);
   const [nonce, setNonce] = useState(0);
   const [placing, setPlacing] = useState(false);
   const [coach, setCoach] = useState<Record<string, Coaching | 'loading'>>({});
@@ -198,7 +202,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
 
   useEffect(() => {
     if (!prefill) return;
-    setSide(prefill.side); setSl(fmtPrice(prefill.sl)); setTp(fmtPrice(prefill.tp)); setNote(prefill.note); setSlT(true); setTpT(true);
+    setSide(prefill.side); setSl(fmtPrice(prefill.sl)); setTp(fmtPrice(prefill.tp)); setNote(prefill.note); setSlT(true); setTpT(true); setSlAmt(null); setTpAmt(null);
   }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const last = (id: string, fallback: number) => prices[id] ?? fallback;
@@ -232,14 +236,23 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const gainUSD = ref && tpN !== undefined && !tpBad ? Math.max(0, amtUSD * (Math.abs(tpN - ref) / ref) - feesUSD) : null;
 
   // new symbol: forget any levels from the last one
-  useEffect(() => { setSl(''); setTp(''); setSlT(false); setTpT(false); }, [inst.id]);
-  // Fill in a stop and target automatically. This re-runs when the side, order type, trigger, volatility or symbol change,
-  // but NOT on every price tick, so the numbers do not move while you are adjusting them.
+  useEffect(() => { setSl(''); setTp(''); setSlT(false); setTpT(false); setSlAmt(null); setTpAmt(null); }, [inst.id]);
+  // Levels that are automatic or set by money keep their distance from the entry as the price moves, so what you see
+  // is what you get when the order is placed. Levels typed as an exact price stay where they are.
+  const levelAt = (kindOf: 'sl' | 'tp', at: number): number | undefined => {
+    const amt = kindOf === 'sl' ? slAmt : tpAmt, touched = kindOf === 'sl' ? slT : tpT;
+    if (amt) {
+      const f = (l: number) => amtUSD * ((long ? l - at : at - l) / at) - amtUSD * rate * 2;
+      return levelForAmount((kindOf === 'sl' ? -1 : 1) * cur.toUSD(amt), at, f) ?? undefined;
+    }
+    if (!touched && auto) return suggestLevel(kindOf, side, at, atr);
+    return kindOf === 'sl' ? slN : tpN;
+  };
   useEffect(() => {
-    if (!auto || !ref) return;
-    if (!slT) setSl(fmtPrice(suggestLevel('sl', side, ref, atr)));
-    if (!tpT) setTp(fmtPrice(suggestLevel('tp', side, ref, atr)));
-  }, [auto, side, kind, trigN, inst.id, atr, ref === null, nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!ref) return;
+    if (slAmt || (auto && !slT)) { const v = levelAt('sl', ref); if (v !== undefined) setSl(fmtPrice(v)); }
+    if (tpAmt || (auto && !tpT)) { const v = levelAt('tp', ref); if (v !== undefined) setTp(fmtPrice(v)); }
+  }, [ref, amtUSD, side, kind, atr, slAmt, tpAmt, slT, tpT, rate, cur.rate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // draw the levels you are setting on the chart while this panel is open
   useEffect(() => {
@@ -276,7 +289,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       if (trigN === undefined) { setMsg({ ok: false, t: 'Enter a trigger price.' }); return; }
       const err = paper.placeOrder(inst, side, kind, trigN, amtUSD, price, slN, tpN, trailN);
       setMsg(err ? { ok: false, t: err } : { ok: true, t: `${kind === 'limit' ? 'Limit' : 'Stop'} order placed: ${long ? 'buy' : 'sell'} when ${inst.id} reaches ${fmt(trigN)}.` });
-      if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
+      if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); setSlT(false); setTpT(false); setSlAmt(null); setTpAmt(null); setNonce((n) => n + 1); }
       return;
     }
     // Stock quotes arrive every second, so the price on screen can be a moment old. Fill at a fresh quote (crypto is already live).
@@ -287,9 +300,10 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       px = q[inst.id]?.price ?? price;
       setPlacing(false);
     }
-    const err = paper.open(inst, side, amtUSD, px, slN, tpN, trailN);
+    // the fill price can differ from the one on screen: measure the stop and target from the real entry
+    const err = paper.open(inst, side, amtUSD, px, levelAt('sl', px), levelAt('tp', px), trailN);
     setMsg(err ? { ok: false, t: err } : { ok: true, t: `${long ? 'Bought' : 'Sold short'} ${(amtUSD / (px * fx * mult)).toPrecision(4)} ${inst.id} at ${fmt(px)} ${ccy}` });
-    if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
+    if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrail(''); setSlT(false); setTpT(false); setSlAmt(null); setTpAmt(null); setNonce((n) => n + 1); }
   };
 
   return (
@@ -355,17 +369,17 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
         </div>
         {mode === 'amount' ? (<>
           <MoneyLevel kind="tp" entry={ref} value={tp} cur={cur} invested={parseFloat(amount) || 0}
-            onChange={(v) => { setTp(v); setTpT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+            onChange={(v) => { setTp(v); setTpT(true); }} onAmount={setTpAmt} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
           <MoneyLevel kind="sl" entry={ref} value={sl} cur={cur} invested={parseFloat(amount) || 0}
-            onChange={(v) => { setSl(v); setSlT(true); }} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
+            onChange={(v) => { setSl(v); setSlT(true); }} onAmount={setSlAmt} result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
         </>) : (<>
           <LevelEditor hideAmount kind="tp" side={side} entry={ref} value={tp} auto={auto && !tpT} atr={atr} cur={cur} other={slN !== undefined && !slBad ? slN : null}
-            onChange={(v) => { setTp(v); setTpT(true); }}
-            onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); } }}
+            onChange={(v) => { setTp(v); setTpT(true); setTpAmt(null); }}
+            onReset={() => { if (ref) { setTp(fmtPrice(suggestLevel('tp', side, ref, atr))); setTpT(false); setTpAmt(null); } }}
             result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
           <LevelEditor hideAmount kind="sl" side={side} entry={ref} value={sl} auto={auto && !slT} atr={atr} cur={cur}
-            onChange={(v) => { setSl(v); setSlT(true); }}
-            onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); } }}
+            onChange={(v) => { setSl(v); setSlT(true); setSlAmt(null); }}
+            onReset={() => { if (ref) { setSl(fmtPrice(suggestLevel('sl', side, ref, atr))); setSlT(false); setSlAmt(null); } }}
             result={(lvl) => (ref ? amtUSD * ((long ? lvl - ref : ref - lvl) / ref) - amtUSD * rate * 2 : null)} />
         </>)}
         {(trigBad || slBad || tpBad) && <div className="small down">{trigBad || slBad || tpBad}</div>}

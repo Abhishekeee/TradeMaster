@@ -7,13 +7,14 @@ interface Props {
   entry: number | null;
   value: string;                          // the level, as a price (the source of truth)
   onChange(v: string): void;
+  onAmount(a: number | null): void;       // the money the user asked for: this, not the price, is what they care about
   result(level: number): number | null;   // money (USD, after fees) if this level is hit
   cur: Cur;
   invested: number;                       // amount being invested, in the display currency (for the quick chips)
 }
 
 /** Profit target or loss limit entered as money. The price level is worked out for you. */
-export default function MoneyLevel({ kind, entry, value, onChange, result, cur, invested }: Props) {
+export default function MoneyLevel({ kind, entry, value, onChange, onAmount, result, cur, invested }: Props) {
   const isSl = kind === 'sl';
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
@@ -24,9 +25,10 @@ export default function MoneyLevel({ kind, entry, value, onChange, result, cur, 
 
   const set = (s: string) => {
     setText(s);
-    if (s.trim() === '') { onChange(''); return; }
+    if (s.trim() === '') { onAmount(null); onChange(''); return; }
     const a = parseFloat(s);
     if (!Number.isFinite(a) || a <= 0) return;
+    onAmount(a);
     const lvl = levelForAmount(isSl ? -cur.toUSD(a) : cur.toUSD(a), entry, result);
     if (lvl !== null) onChange(fmtPrice(lvl));
   };
