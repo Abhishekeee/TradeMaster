@@ -347,3 +347,7 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .lvltabs button { font-size: 12px; }
 .lvltabs button.on { background: var(--blue); color: #fff; }
 .lvltabs button:not(.on):hover { background: var(--panel); }
+.coach { font-size: 12px; padding: 6px 8px; border-left: 3px solid var(--line); background: var(--bg); }
+.coach.bad { border-left-color: #ef5350; }
+.coach.good { border-left-color: #26a69a; }
+.coach div { color: var(--mute); margin-top: 2px; }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { currencyOf, fetchLivePrices } from '../data';
+import { coachTimeframe, coachTrade, type Coaching } from '../coach';
+import { currencyOf, fetchCandles, fetchLivePrices } from '../data';
 import type { Cur } from '../fx';
-import { costOf, exitFeeOf, feeInOf, FEE_DEFAULT, netPnl, pnlOf, type Position, type usePaper } from '../paper';
+import { costOf, exitFeeOf, feeInOf, FEE_DEFAULT, netPnl, pnlOf, type Closed, type Position, type usePaper } from '../paper';
 import { usePrices } from '../priceStore';
 import { fmt, type Instrument } from '../types';
 import MoneyLevel from './MoneyLevel';
@@ -175,8 +176,22 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const [slT, setSlT] = useState(false);           // the user has taken over the stop
   const [tpT, setTpT] = useState(false);           // ... and the target
   const [nonce, setNonce] = useState(0);
+  const [coach, setCoach] = useState<Record<string, Coaching | 'loading'>>({});
+  const [shown, setShown] = useState<Record<string, boolean>>({});
+  // the review of a trade: needs the chart around it, fetched once, and works without it if the feed has nothing
+  const review = (h: Closed) => {
+    if (coach[h.id]) return;
+    setCoach((c) => ({ ...c, [h.id]: 'loading' }));
+    (async () => {
+      let candles = null;
+      try { candles = await fetchCandles(h.inst, coachTimeframe(h), 1000); } catch { /* review without the chart */ }
+      setCoach((c) => ({ ...c, [h.id]: coachTrade(h, candles) }));
+    })();
+  };
   const [mode, setMode] = useState<'amount' | 'price'>(() => { try { return localStorage.getItem('tm-lvlmode') === 'price' ? 'price' : 'amount'; } catch { return 'amount'; } });
   const pickMode = (m: 'amount' | 'price') => { setMode(m); try { localStorage.setItem('tm-lvlmode', m); } catch { /* ignore */ } };
+  const newest = acc.history[0];
+  useEffect(() => { if (newest) { setShown((s) => (newest.id in s ? s : { ...s, [newest.id]: true })); review(newest); } }, [newest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!closeAll) return; const t = setTimeout(() => setCloseAll(false), 3000); return () => clearTimeout(t); }, [closeAll]);
 
   useEffect(() => {
@@ -421,14 +436,25 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
         {acc.history.length ? (
           <table className="hist"><tbody>
             <tr><th>Closed</th><th>Symbol</th><th>Result</th><th>Net P&amp;L</th></tr>
-            {acc.history.slice(0, 15).map((h) => (
-              <tr key={h.id}>
-                <td className="small">{new Date(h.exitTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}</td>
-                <td><b>{h.inst.id}</b> <span className={h.side === 'long' ? 'up' : 'down'}>{h.side === 'long' ? '▲' : '▼'}</span></td>
-                <td><span className={`chip ${h.reason}`}>{h.reason === 'stop' ? 'Stop hit' : h.reason === 'target' ? 'Target hit' : 'Closed'}</span></td>
-                <td className={col(h.pnl)}><b>{cur.signed(h.pnl)}</b>{h.fees !== undefined && h.gross !== undefined && <div className="small" title="Profit before fees, and total fees paid">gross {cur.signed(h.gross)} · fees −{cur.money(h.fees)}</div>}</td>
-              </tr>
-            ))}
+            {acc.history.slice(0, 15).map((h) => {
+              const co = coach[h.id];
+              return [
+                <tr key={h.id}>
+                  <td className="small">{new Date(h.exitTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}</td>
+                  <td><b>{h.inst.id}</b> <span className={h.side === 'long' ? 'up' : 'down'}>{h.side === 'long' ? '▲' : '▼'}</span></td>
+                  <td>
+                    <span className={`chip ${h.reason}`}>{h.reason === 'stop' ? 'Stop hit' : h.reason === 'target' ? 'Target hit' : 'Closed'}</span>
+                    <div><button className="lvl-link" onClick={() => { setShown((s) => ({ ...s, [h.id]: !s[h.id] })); review(h); }}>{shown[h.id] ? 'Hide' : h.pnl > 0 ? 'Why it worked' : 'What went wrong'}</button></div>
+                  </td>
+                  <td className={col(h.pnl)}><b>{cur.signed(h.pnl)}</b>{h.fees !== undefined && h.gross !== undefined && <div className="small" title="Profit before fees, and total fees paid">gross {cur.signed(h.gross)} · fees −{cur.money(h.fees)}</div>}</td>
+                </tr>,
+                shown[h.id] && (
+                  <tr key={h.id + 'c'}><td colSpan={4} className={`coach ${co && co !== 'loading' ? co.tone : ''}`}>
+                    {!co || co === 'loading' ? 'Checking the chart…' : <><b>{co.text}</b>{co.tip && <div>{co.tip}</div>}</>}
+                  </td></tr>
+                ),
+              ];
+            })}
           </tbody></table>
         ) : <span className="small">Closed trades will appear here.</span>}
       </div>

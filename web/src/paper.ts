@@ -19,6 +19,7 @@ export interface Position {
   trail?: number; // trailing stop distance in percent: the stop follows the price but never moves backwards
   feeIn?: number; // entry fee already paid, in USD
   rate?: number;  // fee rate this position was opened with
+  eq?: number;    // account equity (USD) just before it was opened, so a later review can judge the size of the bet
 }
 export interface Closed {
   id: string; inst: Instrument; side: 'long' | 'short'; qty: number; entry: number; exit: number;
@@ -26,6 +27,7 @@ export interface Closed {
   gross?: number; // profit before fees, USD
   fees?: number;  // entry + exit fees, USD
   reason: 'manual' | 'stop' | 'target'; time: number; exitTime: number; ccy?: string;
+  sl?: number; tp?: number; trail?: number; eq?: number; // what the position looked like when it closed, for the trade review
 }
 /** A limit or stop order waiting for its trigger price. */
 export interface Order {
@@ -74,7 +76,7 @@ export function usePaper(usdPer: (ccy: string) => number) {
     const gross = pnlOf(p, exit, fx);
     const feeOut = exitFeeOf(p, exit, fx);
     const fees = feeInOf(p) + feeOut;
-    const closed: Closed = { id: p.id, inst: p.inst, side: p.side, qty: p.qty, entry: p.entry, exit, pnl: gross - fees, gross, fees, reason, time: p.time, exitTime: Date.now(), ccy: p.ccy };
+    const closed: Closed = { id: p.id, inst: p.inst, side: p.side, qty: p.qty, entry: p.entry, exit, pnl: gross - fees, gross, fees, reason, time: p.time, exitTime: Date.now(), ccy: p.ccy, sl: p.sl, tp: p.tp, trail: p.trail, eq: p.eq };
     return { ...a, cash: a.cash + costOf(p) + gross - feeOut, positions: a.positions.filter((x) => x.id !== p.id), history: [closed, ...a.history].slice(0, 200) };
   };
 
@@ -88,7 +90,7 @@ export function usePaper(usdPer: (ccy: string) => number) {
     const cost = amountUSD + feeIn;
     if (cost > a.cash + 1e-9) return 'Not enough cash. Add funds or reduce the amount.';
     const stop = sl ?? (trail ? price * (side === 'long' ? 1 - trail / 100 : 1 + trail / 100) : undefined);
-    const pos: Position = { id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, inst, side, qty: amountUSD / (price * fx * mult), entry: price, sl: stop, tp, trail, time: Date.now(), mult, ccy, fx, feeIn, rate };
+    const pos: Position = { id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, inst, side, qty: amountUSD / (price * fx * mult), entry: price, sl: stop, tp, trail, time: Date.now(), mult, ccy, fx, feeIn, rate, eq: a.cash + a.positions.reduce((s, x) => s + costOf(x), 0) };
     return { ...a, cash: a.cash - cost, positions: [pos, ...a.positions] };
   };
 

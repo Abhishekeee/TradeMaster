@@ -142,6 +142,10 @@ Open **More options** for anything else:
 - **Trailing stop**: a stop that follows the price at a distance you choose and never moves backward.
 - **Risk per trade**: enter the share of your account you are willing to lose (many people use 1%) and press **Set amount from stop**. The amount is calculated so that being stopped out loses about that share of your equity.
 
+### Trade review
+
+Under **Trade history**, the newest closed trade is reviewed automatically, and you can open any other with **What went wrong** (losses) or **Why it worked** (wins). The review looks at your trade and the chart around it and answers in a few simple words. For a loss it names the most likely cause, for example no stop loss, a stop that was too close, trading against the trend, chasing a big move, taking profit too late, or a bet that was too big. For a win it tells you what you did right. It is a rule-based coach, not a promise: it points to the likeliest reason, not the only one.
+
 ### Fees and currency
 
 - Each trade pays a fee of **0.05% on entry and 0.05% on exit** by default. Change it in the account section. The profit shown on every position and in your history is **net of fees**, with the gross figure and the fees listed beside it, so there are no surprises.
