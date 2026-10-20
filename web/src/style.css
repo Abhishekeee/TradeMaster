@@ -345,3 +345,5 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .mlvl .lvl-chips { margin-top: 4px; }
 .lvltabs { margin-top: 10px; }
 .lvltabs button { font-size: 12px; }
+.lvltabs button.on { background: var(--blue); color: #fff; }
+.lvltabs button:not(.on):hover { background: var(--panel); }
