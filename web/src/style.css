@@ -351,3 +351,4 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .coach.bad { border-left-color: #ef5350; }
 .coach.good { border-left-color: #26a69a; }
 .coach div { color: var(--mute); margin-top: 2px; }
+.feehint { margin-top: 4px; color: var(--mute); }

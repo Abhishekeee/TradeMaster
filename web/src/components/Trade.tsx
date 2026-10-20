@@ -116,6 +116,7 @@ function PositionCard({ p, px, cur, paper, onOpen, atr, viewed, onPreview }: { p
       </div>
 
       {p.trail ? <div className="small" style={{ marginTop: 4 }}><span className="chip">Trailing stop {p.trail}%</span> the stop follows the best price and never moves back</div> : null}
+      {Math.abs(gross) < fees && <div className="small feehint">Starts below zero because of fees (in + out), not a price drop. The price must move about {((fees / costOf(p)) * 100).toFixed(2)}% your way to break even.</div>}
       <div className="pfees small" title="Profit after the entry fee already paid and the exit fee you would pay now">
         Gross <b className={col(gross)}>{cur.signed(gross)}</b> · Fees <b>−{cur.money(fees)}</b> · Net <b className={col(pl)}>{cur.signed(pl)}</b>
       </div>
@@ -176,6 +177,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
   const [slT, setSlT] = useState(false);           // the user has taken over the stop
   const [tpT, setTpT] = useState(false);           // ... and the target
   const [nonce, setNonce] = useState(0);
+  const [placing, setPlacing] = useState(false);
   const [coach, setCoach] = useState<Record<string, Coaching | 'loading'>>({});
   const [shown, setShown] = useState<Record<string, boolean>>({});
   // the review of a trade: needs the chart around it, fetched once, and works without it if the feed has nothing
@@ -267,7 +269,8 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
     URL.revokeObjectURL(a.href);
   };
 
-  const place = () => {
+  const place = async () => {
+    if (placing) return;
     if (!price) { setMsg({ ok: false, t: 'No price yet.' }); return; }
     if (kind !== 'market') {
       if (trigN === undefined) { setMsg({ ok: false, t: 'Enter a trigger price.' }); return; }
@@ -276,8 +279,16 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
       return;
     }
-    const err = paper.open(inst, side, amtUSD, price, slN, tpN, trailN);
-    setMsg(err ? { ok: false, t: err } : { ok: true, t: `${long ? 'Bought' : 'Sold short'} ${qty.toPrecision(4)} ${inst.id} at ${fmt(price)} ${ccy}` });
+    // Stock quotes arrive every 1.5 s, so the price on screen can be a moment old. Fill at a fresh quote (crypto is already live).
+    let px = price;
+    if (inst.source !== 'binance') {
+      setPlacing(true);
+      const q = await Promise.race([fetchLivePrices([inst]), new Promise<Record<string, { price: number }>>((r) => setTimeout(() => r({}), 900))]);
+      px = q[inst.id]?.price ?? price;
+      setPlacing(false);
+    }
+    const err = paper.open(inst, side, amtUSD, px, slN, tpN, trailN);
+    setMsg(err ? { ok: false, t: err } : { ok: true, t: `${long ? 'Bought' : 'Sold short'} ${(amtUSD / (px * fx * mult)).toPrecision(4)} ${inst.id} at ${fmt(px)} ${ccy}` });
     if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
   };
 
@@ -370,7 +381,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
         )}
         <div className="small" style={{ marginTop: 4 }}>Amounts are after fees. The trade closes by itself when the target or stop is reached.</div>
 
-        <button className={`act ${long ? 'buyact' : 'sellact'}`} onClick={place}>{kind === 'market' ? `${long ? 'Buy' : 'Sell'} ${inst.id}` : `Place ${kind} ${long ? 'buy' : 'sell'}${trigN !== undefined ? ` at ${fmt(trigN)}` : ''}`}</button>
+        <button className={`act ${long ? 'buyact' : 'sellact'}`} onClick={place} disabled={placing}>{placing ? 'Getting the latest price…' : kind === 'market' ? `${long ? 'Buy' : 'Sell'} ${inst.id}` : `Place ${kind} ${long ? 'buy' : 'sell'}${trigN !== undefined ? ` at ${fmt(trigN)}` : ''}`}</button>
         {msg && <div className={`small ${msg.ok ? 'up' : 'down'}`} style={{ marginTop: 6 }}>{msg.t}</div>}
 
         <details className="fold">
