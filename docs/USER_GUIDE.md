@@ -118,7 +118,7 @@ Do this many times before you trust any approach. A handful of trades tells you 
 
 ![Paper trading](screenshots/02-paper-trading.png)
 
-You start with **$100,000** of virtual money. Add more or reset under **Trade → Add cash or reset account**.
+You start with **$100,000** of virtual money. Add more or reset under **Trade → Account details, add cash, fees**.
 
 ### Placing an order
 
