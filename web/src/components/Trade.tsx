@@ -279,7 +279,7 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       if (!err) { setAmount(''); setSl(''); setTp(''); setNote(''); setTrigger(''); setTrail(''); setSlT(false); setTpT(false); setNonce((n) => n + 1); }
       return;
     }
-    // Stock quotes arrive every 1.5 s, so the price on screen can be a moment old. Fill at a fresh quote (crypto is already live).
+    // Stock quotes arrive every second, so the price on screen can be a moment old. Fill at a fresh quote (crypto is already live).
     let px = price;
     if (inst.source !== 'binance') {
       setPlacing(true);

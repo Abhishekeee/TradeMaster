@@ -189,7 +189,7 @@ export async function fetchLivePrices(insts: Instrument[]): Promise<Record<strin
  * Live updates. Calls onCandle for candle updates and onTick for every new price.
  * Binance: websocket with the per-trade stream (tens of ticks a second) plus the 1s candle stream. It reconnects by
  * itself and falls back to fast polling while disconnected.
- * Yahoo (stocks, forex, futures): the batch quote endpoint every 1.5s for the price, candles every 8s.
+ * Yahoo (stocks, forex, futures): the batch quote endpoint every 1s for the price, candles every 8s.
  * Returns a disposer.
  */
 export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => void, onState: (s: FeedStatus) => void, onTick?: (price: number) => void) {
@@ -202,7 +202,7 @@ export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => 
     let closed = false;
     const priceLoop = async () => {
       if (dead) return;
-      let wait = 1500;
+      let wait = 1000;
       if (!document.hidden) {
         const q = (await fetchLivePrices([inst]))[inst.id];
         if (dead) return;
@@ -277,7 +277,7 @@ export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => 
 /**
  * Price ticks for several symbols at once, used to keep open positions and alerts current while you look at another chart.
  * Binance: one websocket with every symbol's trade stream (a tick on every trade), reconnecting by itself and polling
- * while it is down. Yahoo: one batched quote request every 1.5s. NSE option contracts: every 4s.
+ * while it is down. Yahoo: one batched quote request every 1s. NSE option contracts: every 4s.
  */
 export function openTicks(insts: Instrument[], onTick: (id: string, price: number) => void): () => void {
   let dead = false;
@@ -319,7 +319,7 @@ export function openTicks(insts: Instrument[], onTick: (id: string, price: numbe
     };
     run();
   };
-  if (yh.length) loop(yh, 1500);
+  if (yh.length) loop(yh, 1000);
   if (nse.length) loop(nse, 4000);
 
   return () => { dead = true; timers.forEach(clearTimeout); cleanups.forEach((f) => f()); };
