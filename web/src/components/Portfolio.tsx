@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Nav from './Nav';
+import AccountMenu, { SaveHint } from './AccountMenu';
 import SymbolSearch from './SymbolSearch';
 import PortfolioImport from './PortfolioImport';
 import { CURRENCIES, makeCurrency, useFx } from '../fx';
@@ -147,6 +148,7 @@ export default function Portfolio() {
         </select>
         <button className="theme" title="Toggle light / dark mode" onClick={flip}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <span className="small pf-upd">{loading ? 'Loading history…' : updated ? `Prices updated ${new Date(updated).toLocaleTimeString()}` : ''}</span>
+        <AccountMenu />
       </header>
 
       <main className="pf">
@@ -171,7 +173,7 @@ export default function Portfolio() {
               <button className="mini" onClick={() => setPanel('import')}>⇪ Import from my broker</button>
               <button className="mini" onClick={addSample}>Try with example stocks</button>
             </div>
-            <p className="small">Everything stays in this browser. Nothing is uploaded and nothing costs money.</p>
+            <p className="small">Everything stays in this browser unless you sign in, and nothing costs money. <SaveHint /></p>
           </div>
         ) : (
           <>

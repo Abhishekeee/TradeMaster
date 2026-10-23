@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChartView, { type ChartApi } from './components/ChartView';
 import Menu from './components/Menu';
 import Nav from './components/Nav';
+import AccountMenu from './components/AccountMenu';
 import Panel from './components/Panel';
 import Trade, { type Prefill } from './components/Trade';
 import Alerts from './components/Alerts';
@@ -421,6 +422,7 @@ export default function App() {
         <button className="theme" title="Take the guided tour" onClick={() => setTourOpen(true)}>? Tour</button>
         <button className="theme" title="Toggle light / dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <LiveBar status={feed} demo={demo} px={price?.px ?? null} ch={price?.ch ?? null} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
+        <AccountMenu />
       </header>
 
       <Tour open={tourOpen} steps={tourSteps} onClose={closeTour} />

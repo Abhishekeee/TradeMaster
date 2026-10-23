@@ -5,6 +5,7 @@ import Portfolio from './components/Portfolio';
 import World from './components/World';
 import Home from './components/Home';
 import { pageFromHash } from './components/Nav';
+import { initCloud } from './cloud';
 import './style.css';
 
 function Shell() {
@@ -17,4 +18,6 @@ function Shell() {
   return page === 'portfolio' ? <Portfolio /> : page === 'world' ? <World /> : page === 'charts' ? <App /> : <Home />;
 }
 
+// start keeping saved data in step with the account (does nothing when sign-in is not set up)
+initCloud();
 createRoot(document.getElementById('root')!).render(<Shell />);

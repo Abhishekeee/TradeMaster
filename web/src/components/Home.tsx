@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Nav from './Nav';
 import SymbolSearch from './SymbolSearch';
 import AltTable from './AltTable';
+import AccountMenu, { SaveHint } from './AccountMenu';
 import { WhyCard } from './WhyCard';
 import { useTheme } from '../theme';
 import { useWatchlist } from '../watchlist';
@@ -184,6 +185,7 @@ export default function Home() {
         <SymbolSearch current={{ id: '', name: '', source: 'yahoo' }} market={market} onMarket={setMarket} onPick={(i) => { if (!inMarket(i, market)) saveMarket('ALL'); openChart(i); }} />
         <button className="theme" title="Toggle light / dark mode" onClick={flip}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <span className="small pf-upd">{updated ? `${live ? '● Live' : 'Market closed'} · updated ${new Date(updated).toLocaleTimeString()}` : 'Loading…'}</span>
+        <AccountMenu />
       </header>
 
       <main className="pf">
@@ -220,6 +222,7 @@ export default function Home() {
             <>
               <div><b>Track and analyse your own stocks and mutual funds</b><div className="small">Add them by hand or from a screenshot of your broker app. You get buy / hold / sell guidance for each, news and a report card.</div></div>
               <a className="mini on" href="#/portfolio" style={{ textDecoration: 'none' }}>{holdings.length ? 'Open my portfolio →' : 'Add my stocks →'}</a>
+              <SaveHint />
             </>
           )}
         </section>

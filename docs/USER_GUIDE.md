@@ -19,6 +19,7 @@ A beginner-friendly tour of TradeMaster: what you are looking at, how to read it
 11. [My Portfolio](#11-my-portfolio)
 12. [World Markets](#12-world-markets)
 13. [Home](#13-home)
+14. [Signing in and saving](#14-signing-in-and-saving)
 
 ---
 
@@ -358,3 +359,14 @@ Home is the first page you see, like the explore page of a broking app. The **ma
 - **Top performers this year, and why:** the best performers of the last 12 months. Press **Why?** to see the sector, business and news behind each. Your own stocks show their rank.
 - **Ideas worth researching:** press the button to scan popular stocks, ETFs and funds that beat the index over 1 and 3 years and do not look stretched. Your own holdings are left out.
 - The search box at the top opens any symbol on the Charts page.
+
+---
+
+## 14. Signing in and saving
+
+Out of the box everything you enter is stored in this browser only. When sign-in has been set up (see [FIREBASE_SETUP.md](FIREBASE_SETUP.md)), a **Sign in** button appears at the top right of every page.
+
+- Click it and choose your Google account. Your portfolios, watchlist, alerts, paper trading, drawings and settings are then saved to your account within a moment of each change, and appear on any other device where you sign in.
+- Click your picture to see when it was last saved, to **Sync now**, to **Sign out**, or to **Sign out and clear this device** (handy on a shared computer; your data stays in your account).
+- If this device and your account both hold different portfolios when you first sign in, you are asked whether to **combine** them, use the account's data, or keep the device's. Nothing is changed until you choose.
+- If sign-in is not set up, the button is hidden and the app works as before.

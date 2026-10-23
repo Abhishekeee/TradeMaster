@@ -108,7 +108,7 @@ export default function PortfolioImport({ hasHoldings, onImport }: Props) {
     <div className="pf-import">
       <p className="small">
         <b>Easiest:</b> open your holdings (stocks or mutual funds) in Groww, Zerodha or any broker app and take a screenshot. Then <b>drop it here, press Ctrl+V to paste it, or click to choose</b>.
-        Long list? Add several screenshots. Nothing leaves your browser, and you check every stock before it is added.
+        Long list? Add several screenshots. The screenshot itself never leaves your browser, and you check every stock before it is added.
       </p>
       <div className={`pf-drop ${over ? 'over' : ''}`} tabIndex={0} role="button" aria-label="Add screenshots"
         onClick={() => pick.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') pick.current?.click(); }}

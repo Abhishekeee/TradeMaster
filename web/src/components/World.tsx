@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createChart, type IChartApi, type ISeriesApi, type Time } from 'lightweight-charts';
 import Nav from './Nav';
+import AccountMenu from './AccountMenu';
 import { useTheme } from '../theme';
 import { COUNTRIES, PERIODS, PERIOD_NAME, periodStart, priceSeries, rebased, statsOf, useWorld, type Country, type Period, type Stats } from '../world';
 
@@ -143,6 +144,7 @@ export default function World() {
         <Nav page="world" />
         <button className="theme" title="Toggle light / dark mode" onClick={flip}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <span className="small pf-upd">{loading ? `Loading markets… ${done}/${total}` : updated ? `Updated ${new Date(updated).toLocaleTimeString()}` : ''}</span>
+        <AccountMenu />
       </header>
 
       <main className="pf">
