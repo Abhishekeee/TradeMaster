@@ -8,12 +8,10 @@ import { analyse, benchmarkFor, shortName, summarise, usePortfolioData, usePortf
 import { ActionPlan, Grades, Signature } from './PortfolioInsights';
 import { MARKETS, loadMarket, saveMarket, type MarketId } from '../markets';
 import { SIGNAL_LABEL, SIGNAL_TONE, computeInsights, decide, type Ai, type Call } from '../portfolioInsights';
-import PortfolioAlternatives from './PortfolioAlternatives';
 import PortfolioNews from './PortfolioNews';
 import PortfolioDeep from './PortfolioDeep';
 import PortfolioWhy from './PortfolioWhy';
 import { useDeep } from '../portfolioDeep';
-import { useWatchlist } from '../watchlist';
 import { runAnalysis } from '../engine/client';
 import { advise } from '../engine/patterns.js';
 import type { Advice, Instrument } from '../types';
@@ -56,12 +54,10 @@ export default function Portfolio() {
   const [panel, setPanel] = useState<'add' | 'import' | null>(null);
   const [market, setMarketState] = useState<MarketId>(loadMarket);
   const setMarket = (m: MarketId) => { setMarketState(m); saveMarket(m); };
-  const [tab, setTab] = useState<'overview' | 'deep' | 'why' | 'alt' | 'news'>('overview');
+  const [tab, setTab] = useState<'overview' | 'deep' | 'why' | 'news'>('overview');
   const [whyFor, setWhyFor] = useState('');
   const [deepFor, setDeepFor] = useState('');
-  const [altFor, setAltFor] = useState('');
   const [newsFor, setNewsFor] = useState('all');
-  const watch = useWatchlist();
   const [sort, setSort] = useState<'weight' | 'pnlPct' | 'alpha' | 'verdict'>('weight');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'));
 
@@ -114,9 +110,6 @@ export default function Portfolio() {
   const deep = useDeep(stats, candles);
   const calls = useMemo(() => new Map<string, Call>(stats.map((s) => [s.h.id, decide(s, ai[s.h.inst.id], deep[s.h.id]?.quality)])), [stats, ai, sum, deep]);
   const ins = useMemo(() => computeInsights(stats, sum, candles, prices, conv), [stats, sum, candles, prices]); // eslint-disable-line react-hooks/exhaustive-deps
-  const mainCcy = useMemo(() => { const m: Record<string, number> = {}; stats.forEach((s) => { m[s.ccy] = (m[s.ccy] ?? 0) + s.value * conv(s.ccy); }); return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'INR'; }, [stats, fx.rates, display]); // eslint-disable-line react-hooks/exhaustive-deps
-  // which market the alternatives and top-performer lists draw from: the chosen one, else where most of the money is
-  const univCcy = market === 'IN' ? 'INR' : market === 'US' ? 'USD' : mainCcy;
   const jump = (id: string) => { setOpen(id); setTimeout(() => document.getElementById('pf-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
 
   const rows = useMemo(() => {
@@ -126,7 +119,7 @@ export default function Portfolio() {
 
   const openChart = (inst: Instrument) => {
     try { localStorage.setItem('tm', JSON.stringify({ ...JSON.parse(localStorage.getItem('tm') || '{}'), inst })); } catch { /* ignore */ }
-    location.hash = '#/';
+    location.hash = '#/charts';
   };
 
   const addSample = async () => {
@@ -138,9 +131,9 @@ export default function Portfolio() {
   return (
     <>
       <header className="topbar">
-        <div className="logo">Trade<b>Master</b></div>
+        <a className="logo" href="#/" title="Home" style={{ textDecoration: 'none', color: 'inherit' }}>Trade<b>Master</b></a>
         <Nav page="portfolio" />
-        <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={`Market for searching stocks and for the alternatives and top-performer lists: ${MARKETS.find((m) => m.id === market)?.hint}`} aria-label="Market">
+        <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={`Market used when searching for a stock to add: ${MARKETS.find((m) => m.id === market)?.hint}`} aria-label="Market">
           {MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
         <select className="pf-who" value={pf.person.id} onChange={(e) => pf.setActive(e.target.value)} aria-label="Whose portfolio">
@@ -185,13 +178,11 @@ export default function Portfolio() {
             <div className="pf-tabs">
               <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>Overview</button>
               <button className={tab === 'deep' ? 'on' : ''} onClick={() => setTab('deep')}>Deep analysis</button>
-              <button className={tab === 'why' ? 'on' : ''} onClick={() => setTab('why')}>Why &amp; winners</button>
-              <button className={tab === 'alt' ? 'on' : ''} onClick={() => setTab('alt')}>Better alternatives</button>
+              <button className={tab === 'why' ? 'on' : ''} onClick={() => setTab('why')}>Why it moved</button>
               <button className={tab === 'news' ? 'on' : ''} onClick={() => setTab('news')}>News</button>
             </div>
             {tab === 'deep' && <PortfolioDeep stats={rows} deep={deep} calls={calls} ai={ai} selected={deepFor || rows[0]?.h.id || ''} setSelected={setDeepFor} />}
-            {tab === 'why' && <PortfolioWhy stats={rows} ccy={univCcy} ins={ins} candles={candles} watch={watch} selected={whyFor || rows[0]?.h.id || ''} setSelected={setWhyFor} onChart={openChart} />}
-            {tab === 'alt' && <PortfolioAlternatives stats={stats} calls={calls} ins={ins} ccy={univCcy} watch={watch} onChart={openChart} selected={altFor} setSelected={setAltFor} />}
+                        {tab === 'why' && <PortfolioWhy stats={rows} candles={candles} selected={whyFor || rows[0]?.h.id || ''} setSelected={setWhyFor} />}
             {tab === 'news' && <PortfolioNews stats={rows} selected={newsFor} setSelected={setNewsFor} />}
             {tab === 'overview' && <>
             <section className="pf-cards">
@@ -240,7 +231,7 @@ export default function Portfolio() {
                           <td>{deep[s.h.id] && (deep[s.h.id].tech || deep[s.h.id].quality !== null) ? <><span className={`badge ${deep[s.h.id].combined.tone}`}>{deep[s.h.id].combined.label}</span><div className="small">{deep[s.h.id].quality !== null ? `quality ${deep[s.h.id].quality}` : 'chart only'}{deep[s.h.id].tech ? ` · ${deep[s.h.id].tech!.rating}` : ''}</div></> : <span className="small">–</span>}</td>
                           <td>{calls.get(s.h.id) && <><span className={`badge ${SIGNAL_TONE[calls.get(s.h.id)!.signal]}`}>{SIGNAL_LABEL[calls.get(s.h.id)!.signal].toUpperCase()}</span><div className="small">{calls.get(s.h.id)!.conf} confidence</div></>}</td>
                         </tr>,
-                        open === s.h.id && <tr key={s.h.id + 'd'} className="pf-detail"><td colSpan={11}><Detail s={s} call={calls.get(s.h.id)} ai={ai[s.h.inst.id]} pf={pf} onChart={() => openChart(s.h.inst)} onDeep={() => { setDeepFor(s.h.id); setTab('deep'); }} onWhy={() => { setWhyFor(s.h.id); setTab('why'); }} onNews={() => { setNewsFor(s.h.id); setTab('news'); }} onAlt={() => { setAltFor(s.h.id); setTab('alt'); }} /></td></tr>,
+                        open === s.h.id && <tr key={s.h.id + 'd'} className="pf-detail"><td colSpan={11}><Detail s={s} call={calls.get(s.h.id)} ai={ai[s.h.inst.id]} pf={pf} onChart={() => openChart(s.h.inst)} onDeep={() => { setDeepFor(s.h.id); setTab('deep'); }} onWhy={() => { setWhyFor(s.h.id); setTab('why'); }} onNews={() => { setNewsFor(s.h.id); setTab('news'); }} /></td></tr>,
                       ];
                     })}
                   </tbody>
@@ -257,7 +248,7 @@ export default function Portfolio() {
   );
 }
 
-function Detail({ s, call, ai, pf, onChart, onDeep, onWhy, onNews, onAlt }: { s: Stat; call?: Call; ai?: Ai; pf: ReturnType<typeof usePortfolios>; onChart(): void; onDeep(): void; onWhy(): void; onNews(): void; onAlt(): void }) {
+function Detail({ s, call, ai, pf, onChart, onDeep, onWhy, onNews }: { s: Stat; call?: Call; ai?: Ai; pf: ReturnType<typeof usePortfolios>; onChart(): void; onDeep(): void; onWhy(): void; onNews(): void }) {
   const stat = (label: string, v: string, c = '') => <div><span>{label}</span><b className={c}>{v}</b></div>;
   return (
     <div className="pf-det">
@@ -276,7 +267,6 @@ function Detail({ s, call, ai, pf, onChart, onDeep, onWhy, onNews, onAlt }: { s:
           <button className="mini" onClick={onDeep}>Deep analysis</button>
           <button className="mini" onClick={onWhy}>Why did it move?</button>
           <button className="mini" onClick={onNews}>Latest news</button>
-          <button className="mini" onClick={onAlt}>Better alternatives</button>
           <button className="mini danger" onClick={() => { if (confirm(`Remove ${shortName(s.h.inst)} from this portfolio?`)) pf.removeHolding(s.h.id); }}>Remove {s.isFund ? 'fund' : 'stock'}</button>
         </div>
       </div>

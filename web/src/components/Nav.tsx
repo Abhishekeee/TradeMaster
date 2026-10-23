@@ -1,12 +1,17 @@
-export type Page = 'charts' | 'portfolio' | 'world';
+export type Page = 'home' | 'charts' | 'portfolio' | 'world';
 
-export const pageFromHash = (): Page => (location.hash.startsWith('#/portfolio') ? 'portfolio' : location.hash.startsWith('#/world') ? 'world' : 'charts');
+/** Home is the landing page; the Charts page lives at #/charts. */
+export const pageFromHash = (): Page => {
+  const h = location.hash;
+  return h.startsWith('#/portfolio') ? 'portfolio' : h.startsWith('#/world') ? 'world' : h.startsWith('#/charts') ? 'charts' : 'home';
+};
 
-/** Top-level switch between the trading workspace and the portfolio analyser. */
+/** Top-level switch between the app's pages. */
 export default function Nav({ page }: { page: Page }) {
   return (
     <nav className="topnav">
-      <a href="#/" className={page === 'charts' ? 'on' : ''}>Charts &amp; Trading</a>
+      <a href="#/" className={page === 'home' ? 'on' : ''}>Home</a>
+      <a href="#/charts" className={page === 'charts' ? 'on' : ''}>Charts &amp; Trading</a>
       <a href="#/portfolio" className={page === 'portfolio' ? 'on' : ''}>My Portfolio</a>
       <a href="#/world" className={page === 'world' ? 'on' : ''}>World Markets</a>
     </nav>

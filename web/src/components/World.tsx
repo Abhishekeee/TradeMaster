@@ -132,14 +132,14 @@ export default function World() {
   );
   const openChart = (c: Country) => {
     try { localStorage.setItem('tm', JSON.stringify({ ...JSON.parse(localStorage.getItem('tm') || '{}'), inst: { id: c.sym, name: `${c.name} · ${c.country}`, source: 'yahoo', kind: 'INDEX' }, market: 'ALL' })); } catch { /* ignore */ }
-    location.hash = '#/';
+    location.hash = '#/charts';
   };
   const when = hover ? new Date(hover.time * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
 
   return (
     <>
       <header className="topbar">
-        <div className="logo">Trade<b>Master</b></div>
+        <a className="logo" href="#/" title="Home" style={{ textDecoration: 'none', color: 'inherit' }}>Trade<b>Master</b></a>
         <Nav page="world" />
         <button className="theme" title="Toggle light / dark mode" onClick={flip}>{theme === 'dark' ? '☀' : '🌙'}</button>
         <span className="small pf-upd">{loading ? `Loading markets… ${done}/${total}` : updated ? `Updated ${new Date(updated).toLocaleTimeString()}` : ''}</span>

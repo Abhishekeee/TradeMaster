@@ -168,6 +168,41 @@ async function mfCandles(code: string, limit: number): Promise<Candle[] | null> 
   return out.length ? out.slice(-limit) : null;
 }
 
+/** One row of a market board: price, today's move, year change, 52-week range and volume. */
+export interface Board { id: string; name: string; price: number; chg: number; volume: number; hi52: number | null; lo52: number | null; chg1y: number | null; live: boolean }
+
+/** Prices for many symbols (stocks, indices, forex, futures) in a few requests, plus Binance coins in one more. */
+export async function fetchBoard(ids: string[]): Promise<Record<string, Board>> {
+  const out: Record<string, Board> = {};
+  const coins = ids.filter((i) => /USDT$/.test(i));
+  const rest = ids.filter((i) => !/USDT$/.test(i));
+  const jobs: Promise<void>[] = [];
+  for (let i = 0; i < rest.length; i += 40) {
+    const chunk = rest.slice(i, i + 40);
+    jobs.push((async () => {
+      try {
+        const r = await fetch(`${API}/api/quote?symbols=${encodeURIComponent(chunk.join(','))}`);
+        if (!r.ok) return;
+        for (const q of (await r.json()).quoteResponse?.result ?? []) {
+          if (typeof q.regularMarketPrice !== 'number') continue;
+          out[q.symbol] = {
+            id: q.symbol, name: q.longName || q.shortName || q.symbol, price: q.regularMarketPrice, chg: q.regularMarketChangePercent ?? 0, volume: q.regularMarketVolume ?? 0,
+            hi52: q.fiftyTwoWeekHigh ?? null, lo52: q.fiftyTwoWeekLow ?? null, chg1y: typeof q.fiftyTwoWeekChangePercent === 'number' ? q.fiftyTwoWeekChangePercent : null, live: q.marketState === 'REGULAR',
+          };
+        }
+      } catch { /* leave missing */ }
+    })());
+  }
+  if (coins.length) {
+    jobs.push((async () => {
+      const q = await fetchQuotes(coins.map((c) => ({ id: c, name: c, source: 'binance' as const, kind: 'CRYPTO' })));
+      Object.entries(q).forEach(([id, v]) => { out[id] = { id, name: id.replace('USDT', ''), price: v.price, chg: v.chg, volume: 0, hi52: null, lo52: null, chg1y: null, live: true }; });
+    })());
+  }
+  await Promise.all(jobs);
+  return out;
+}
+
 /** Name, price and 1-year change for many symbols in a few requests (the batch quote feed carries the 52-week change). */
 export async function fetchYearChanges(ids: string[]): Promise<Record<string, { name: string; price: number; chg1y: number }>> {
   const out: Record<string, { name: string; price: number; chg1y: number }> = {};

@@ -57,7 +57,7 @@ export default function SymbolSearch({ current, onPick, market = 'ALL', onMarket
     <div className="symsearch" ref={box}>
       <input
         value={open ? text : current.id}
-        placeholder={market === 'IN' ? 'Search Indian stocks, e.g. Reliance, TCS…' : market === 'ALL' ? 'Search stocks, crypto, forex…' : `Search ${label}…`}
+        placeholder={market === 'IN' ? 'Search Indian stocks…' : market === 'ALL' ? 'Search stocks, crypto, forex…' : `Search ${label}…`}
         spellCheck={false}
         aria-label="Search symbol"
         onFocus={(e) => { setOpen(true); setText(''); e.target.select(); }}

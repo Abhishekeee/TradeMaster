@@ -400,7 +400,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <div className="logo">Trade<b>Master</b></div>
+        <a className="logo" href="#/" title="Home" style={{ textDecoration: 'none', color: 'inherit' }}>Trade<b>Master</b></a>
         <Nav page="charts" />
         <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={MARKETS.find((m) => m.id === market)?.hint} aria-label="Market" data-tour="market">
           {MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}

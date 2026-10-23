@@ -540,3 +540,21 @@ input, select { background: var(--bg); border: 1px solid var(--line); border-rad
 .wd-cur { font-weight: 700; }
 @media (max-width: 900px) { .wd-wrap { grid-template-columns: 1fr; } }
 .wd-cc { display: inline-block; min-width: 24px; padding: 0 4px; margin-right: 4px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); font-size: 10px; font-weight: 700; text-align: center; color: var(--mute); letter-spacing: .3px; }
+
+/* ---- home ---- */
+.hm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.hm-tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.hm-tile:hover { border-color: var(--blue); }
+.hm-lvl { font-size: 19px; font-variant-numeric: tabular-nums; }
+.hm-spark { width: 100%; height: 34px; margin-top: 4px; }
+.hm-cues { display: flex; flex-wrap: wrap; gap: 4px 0; align-items: center; margin: 0 0 12px; }
+.hm-mine { display: flex; flex-wrap: wrap; gap: 14px 30px; align-items: center; justify-content: space-between; }
+.hm-cues a, .hm-mine a { color: var(--blue); }
+.hm-mine a.mini { color: #fff; }
+.hm-big { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hm-two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.hm-sectors { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 8px; }
+.hm-sector { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; cursor: pointer; background: var(--bg); }
+.hm-sector:hover { border-color: var(--blue); }
+.hm-table td { vertical-align: middle; }
+@media (max-width: 1000px) { .hm-two { grid-template-columns: 1fr; } }

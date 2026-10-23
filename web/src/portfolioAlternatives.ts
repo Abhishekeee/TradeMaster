@@ -129,11 +129,11 @@ export function useAlternatives(ccy: string, watch: Instrument[], held: Set<stri
 }
 
 /* ---------------------------------------------------------------- this year's best performers among widely held large companies */
-const IN_LARGE = ['RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI', 'SUNPHARMA', 'TITAN',
+export const IN_LARGE = ['RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI', 'SUNPHARMA', 'TITAN',
   'ULTRACEMCO', 'BAJFINANCE', 'WIPRO', 'NESTLEIND', 'HCLTECH', 'POWERGRID', 'NTPC', 'ONGC', 'M&M', 'TATASTEEL', 'JSWSTEEL', 'ADANIENT', 'ADANIPORTS', 'COALINDIA', 'BAJAJFINSV', 'TECHM', 'GRASIM',
   'CIPLA', 'DRREDDY', 'EICHERMOT', 'HEROMOTOCO', 'BRITANNIA', 'APOLLOHOSP', 'DIVISLAB', 'HINDALCO', 'INDUSINDBK', 'BPCL', 'TATACONSUM', 'SBILIFE', 'HDFCLIFE', 'SHRIRAMFIN', 'TRENT', 'BEL', 'HAL',
   'JIOFIN', 'VEDL', 'DLF', 'IRCTC', 'PIDILITIND', 'SIEMENS', 'TVSMOTOR', 'CHOLAFIN', 'BAJAJ-AUTO', 'GAIL', 'IOC', 'PNB', 'BANKBARODA', 'LUPIN', 'MUTHOOTFIN', 'GODREJCP', 'HAVELLS', 'ABB'].map((s) => s + '.NS');
-const US_LARGE = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'NFLX', 'JPM', 'BAC', 'DIS', 'KO', 'WMT', 'XOM', 'PFE', 'BA', 'INTC', 'UBER', 'COIN', 'AVGO', 'ORCL', 'CRM', 'V', 'MA', 'UNH', 'LLY', 'COST', 'PEP', 'CVX', 'ADBE', 'QCOM', 'MRK', 'ABBV', 'HD', 'PG', 'JNJ', 'CAT', 'GE', 'GS'];
+export const US_LARGE = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'NFLX', 'JPM', 'BAC', 'DIS', 'KO', 'WMT', 'XOM', 'PFE', 'BA', 'INTC', 'UBER', 'COIN', 'AVGO', 'ORCL', 'CRM', 'V', 'MA', 'UNH', 'LLY', 'COST', 'PEP', 'CVX', 'ADBE', 'QCOM', 'MRK', 'ABBV', 'HD', 'PG', 'JNJ', 'CAT', 'GE', 'GS'];
 
 export interface Winner { inst: Instrument; name: string; ret1y: number; held: boolean }
 export interface Scan { top: Winner[]; rank: Record<string, { pos: number; of: number; ret1y: number }>; total: number; bench: number | null; benchName: string }

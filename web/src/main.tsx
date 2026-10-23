@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import Portfolio from './components/Portfolio';
 import World from './components/World';
+import Home from './components/Home';
 import { pageFromHash } from './components/Nav';
 import './style.css';
 
@@ -13,7 +14,7 @@ function Shell() {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  return page === 'portfolio' ? <Portfolio /> : page === 'world' ? <World /> : <App />;
+  return page === 'portfolio' ? <Portfolio /> : page === 'world' ? <World /> : page === 'charts' ? <App /> : <Home />;
 }
 
 createRoot(document.getElementById('root')!).render(<Shell />);
