@@ -12,6 +12,37 @@ const cors = (origin, env) => {
 
 const json = (body, status, extra = {}) => new Response(body, { status, headers: { 'Content-Type': 'application/json', ...extra } });
 
+/* News: Google News first; when Google refuses a datacenter address, fall back to Bing News and reshape it to the same format */
+const BROWSER = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36', Accept: 'application/rss+xml, application/xml, text/xml, */*', 'Accept-Language': 'en-US,en;q=0.9' };
+const unxml = (s) => s.replace(/<!\[CDATA\[|\]\]>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
+const xml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function bingToGoogleShape(feed) {
+  const items = [...feed.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 40).map((m) => {
+    const tag = (t) => { const x = new RegExp('<' + t + '>([\\s\\S]*?)</' + t + '>').exec(m[1]); return x ? unxml(x[1]).trim() : ''; };
+    let link = tag('link');
+    try { const real = new URL(link).searchParams.get('url'); if (real) link = real; } catch { /* keep the link as it is */ }
+    return '<item><title>' + xml(tag('title')) + '</title><link>' + xml(link) + '</link><pubDate>' + xml(tag('pubDate')) + '</pubDate><source>' + xml(tag('News:Source')) + '</source></item>';
+  });
+  return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>' + items.join('') + '</channel></rss>';
+}
+
+async function newsFeed(term, region) {
+  let google = 0;
+  try {
+    const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=en-${region}&gl=${region}&ceid=${region}:en`, { headers: BROWSER });
+    google = r.status;
+    if (r.ok) { const t = await r.text(); if (t.includes('<item>')) return { body: t, via: 'google', google }; }
+  } catch { /* try the fallback */ }
+  // Bing cannot search a date range, so say "nothing" instead of showing unrelated days
+  if (/\b(after|before):/.test(term)) return { body: '<?xml version="1.0"?><rss><channel></channel></rss>', via: 'none', google };
+  try {
+    const r = await fetch(`https://www.bing.com/news/search?q=${encodeURIComponent(term)}&format=rss&setmkt=en-${region}`, { headers: BROWSER });
+    if (r.ok) return { body: bingToGoogleShape(await r.text()), via: 'bing', google };
+  } catch { /* give up below */ }
+  return { body: null, via: 'none', google };
+}
+
 /* Yahoo session (cookie + crumb), cached per isolate */
 let session = null;
 async function getSession(force = false) {
@@ -83,8 +114,10 @@ async function route(u, extra) {
     const term = (q.get('q') ?? '').trim().slice(0, 120);
     const region = q.get('region') === 'IN' ? 'IN' : 'US';
     if (term.length < 2) return json('{"error":"no query"}', 400, extra);
-    const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=en-${region}&gl=${region}&ceid=${region}:en`, { headers: UA });
-    return r.ok ? new Response(await r.text(), { status: 200, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=300', ...extra } }) : json('{"error":"news unavailable"}', 502, extra);
+    const f = await newsFeed(term, region);
+    return f.body !== null
+      ? new Response(f.body, { status: 200, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=300', 'X-News-Via': f.via, ...extra } })
+      : json(JSON.stringify({ error: 'news unavailable', google: f.google }), 502, extra);
   }
 
   if (p === '/api/options') {
