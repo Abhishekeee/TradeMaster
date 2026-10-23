@@ -38,7 +38,7 @@ const ccyCache = new Map<string, string>();
 /** Currency the instrument's price is quoted in. */
 export function currencyOf(inst: Instrument): string {
   if (inst.source === 'binance') return 'USD';
-  if (inst.source === 'nse') return 'INR';
+  if (inst.source === 'nse' || inst.source === 'mf') return 'INR';
   const known = ccyCache.get(inst.id);
   if (known) return known;
   if (/.(NS|BO)$/.test(inst.id) || ['^NSEI', '^NSEBANK', '^BSESN'].includes(inst.id)) return 'INR';
@@ -98,24 +98,118 @@ async function yahooCandles(symbol: string, tf: string, limit: number): Promise<
   return r ? r.candles.slice(-limit) : null;
 }
 
+/** Daily candles for a plain range ("1y", "2y"), lighter than the 10-year history the charts load. */
+export async function fetchDaily(symbol: string, range = '1y'): Promise<Candle[] | null> {
+  try {
+    const r = await fetch(`${API}/api/yahoo/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}&includePrePost=false`);
+    if (!r.ok) return null;
+    const res = (await r.json())?.chart?.result?.[0];
+    const q = res?.indicators?.quote?.[0];
+    if (!res?.timestamp || !q) return null;
+    const out: Candle[] = [];
+    res.timestamp.forEach((t: number, i: number) => {
+      if (q.close[i] == null) return;
+      if (out.length && out[out.length - 1].time >= t) return;
+      out.push({ time: t, open: q.open[i] ?? q.close[i], high: q.high[i] ?? q.close[i], low: q.low[i] ?? q.close[i], close: q.close[i], volume: q.volume?.[i] ?? 0 });
+    });
+    return out.length ? out : null;
+  } catch { return null; }
+}
+
 export async function fetchCandles(inst: Instrument, tf: string, limit = 500): Promise<Candle[] | null> {
   if (inst.source === 'nse') return null; // NSE contracts have no price history feed
+  if (inst.source === 'mf') return mfCandles(inst.id.slice(3), limit);
   return inst.source === 'binance' ? binanceCandles(inst.id, tf, limit) : yahooCandles(inst.id, tf, limit);
 }
 
 /** Longest history available, used to backtest. More trades means a more trustworthy win rate. */
 export const fetchHistory = (inst: Instrument, tf: string) => fetchCandles(inst, tf, 5000);
 
+/* ---------------------------------------------------------------- Indian mutual funds (mfapi.in: free, no key, allows browser calls) */
+export interface FundHit { code: number; name: string }
+export const fundInst = (h: FundHit): Instrument => ({ id: `MF:${h.code}`, name: h.name, source: 'mf', kind: 'MUTUALFUND' });
+
+export async function searchFunds(query: string): Promise<FundHit[]> {
+  try {
+    const r = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`);
+    if (!r.ok) return [];
+    return ((await r.json()) as { schemeCode: number; schemeName: string }[]).map((x) => ({ code: x.schemeCode, name: x.schemeName.replace(/\s+/g, ' ').trim() }));
+  } catch { return []; }
+}
+
+// the full NAV history (one download per fund) also carries the fund house and category
+const mfCache = new Map<string, { at: number; p: Promise<{ meta?: Record<string, string>; data?: { date: string; nav: string }[] } | null> }>();
+function mfRaw(code: string) {
+  const hit = mfCache.get(code);
+  if (hit && Date.now() - hit.at < 10 * 60000) return hit.p;
+  const p = (async () => {
+    try { const r = await fetch(`https://api.mfapi.in/mf/${code}`); return r.ok ? await r.json() : null; } catch { return null; }
+  })();
+  mfCache.set(code, { at: Date.now(), p });
+  return p;
+}
+
+export interface FundMeta { house: string | null; category: string | null; type: string | null }
+export async function fundMeta(inst: Instrument): Promise<FundMeta | null> {
+  const j = await mfRaw(inst.id.slice(3));
+  return j?.meta ? { house: j.meta.fund_house ?? null, category: j.meta.scheme_category ?? null, type: j.meta.scheme_type ?? null } : null;
+}
+
+/** One NAV per day, shaped like a candle so the same analysis works on funds and stocks. */
+async function mfCandles(code: string, limit: number): Promise<Candle[] | null> {
+  const rows = (await mfRaw(code))?.data ?? [];
+  const out: Candle[] = [];
+  for (const x of rows) {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(x.date);
+    const v = parseFloat(x.nav);
+    if (m && v > 0) out.push({ time: Date.UTC(+m[3], +m[2] - 1, +m[1]) / 1000, open: v, high: v, low: v, close: v, volume: 0 });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out.length ? out.slice(-limit) : null;
+}
+
+/** Name, price and 1-year change for many symbols in a few requests (the batch quote feed carries the 52-week change). */
+export async function fetchYearChanges(ids: string[]): Promise<Record<string, { name: string; price: number; chg1y: number }>> {
+  const out: Record<string, { name: string; price: number; chg1y: number }> = {};
+  for (let i = 0; i < ids.length; i += 40) {
+    try {
+      const r = await fetch(`${API}/api/quote?symbols=${encodeURIComponent(ids.slice(i, i + 40).join(','))}`);
+      if (!r.ok) continue;
+      for (const q of (await r.json()).quoteResponse?.result ?? []) {
+        if (typeof q.fiftyTwoWeekChangePercent === 'number' && typeof q.regularMarketPrice === 'number') out[q.symbol] = { name: q.longName || q.shortName || q.symbol, price: q.regularMarketPrice, chg1y: q.fiftyTwoWeekChangePercent };
+      }
+    } catch { /* skip this batch */ }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- company fundamentals */
+export interface FundamentalsRaw { quote: Record<string, unknown> | null; summary: Record<string, unknown> | null }
+const fundCache = new Map<string, { at: number; v: FundamentalsRaw }>();
+
+/** Valuation from the batch quote feed plus profitability, debt and growth from the company summary. */
+export async function fetchFundamentalsRaw(inst: Instrument): Promise<FundamentalsRaw> {
+  const hit = fundCache.get(inst.id);
+  if (hit && Date.now() - hit.at < 30 * 60000) return hit.v;
+  const [quote, summary] = await Promise.all([
+    (async () => { try { const r = await fetch(`${API}/api/quote?symbols=${encodeURIComponent(inst.id)}`); return r.ok ? (await r.json()).quoteResponse?.result?.[0] ?? null : null; } catch { return null; } })(),
+    (async () => { try { const r = await fetch(`${API}/api/fundamentals?symbol=${encodeURIComponent(inst.id)}`); return r.ok ? (await r.json()).quoteSummary?.result?.[0] ?? null : null; } catch { return null; } })(),
+  ]);
+  const v = { quote, summary };
+  if (quote || summary) fundCache.set(inst.id, { at: Date.now(), v });
+  return v;
+}
+
 /* ---------------------------------------------------------------- symbol search */
 const CRYPTO = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'LINKUSDT', 'TRXUSDT', 'DOTUSDT', 'LTCUSDT', 'MATICUSDT', 'SHIBUSDT', 'TONUSDT', 'NEARUSDT', 'ATOMUSDT', 'UNIUSDT', 'PEPEUSDT', 'SUIUSDT'];
 
-export async function searchInstruments(query: string): Promise<Instrument[]> {
+export async function searchInstruments(query: string, count = 10): Promise<Instrument[]> {
   const q = query.trim().toUpperCase().replace(/\s+/g, '');
   if (!q) return CRYPTO.slice(0, 8).map((s) => ({ id: s, name: 'Crypto', source: 'binance' as const, kind: 'CRYPTO' }));
   const out: Instrument[] = CRYPTO.filter((s) => s.startsWith(q) || s.replace('USDT', '').startsWith(q))
     .slice(0, 4).map((s) => ({ id: s, name: 'Crypto · Binance', source: 'binance' as const, kind: 'CRYPTO' }));
   try {
-    const r = await fetch(`${API}/api/yahoo-search/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`);
+    const r = await fetch(`${API}/api/yahoo-search/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=${count}&newsCount=0`);
     if (r.ok) {
       const j = await r.json();
       for (const x of j.quotes ?? []) {

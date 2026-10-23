@@ -23,7 +23,7 @@ export interface BacktestResult {
   recent: { name: string; dir: number; score: number; time: number; ret: number; win: boolean; group: string }[];
 }
 
-export interface Instrument { id: string; name: string; source: 'binance' | 'yahoo' | 'nse'; kind?: string; lot?: number }
+export interface Instrument { id: string; name: string; source: 'binance' | 'yahoo' | 'nse' | 'mf'; kind?: string; lot?: number }
 
 export interface Quote { price: number; chg: number }
 

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { fetchOptions, fetchQuotes, type OptionChain, type OptionRow } from '../data';
-import { CATEGORIES } from '../markets';
+import { MARKETS, categoriesFor, type MarketId } from '../markets';
 import { fmt, type Instrument, type Quote } from '../types';
 import type { usePaper } from '../paper';
 import type { useWatchlist } from '../watchlist';
 import NseOptions from './NseOptions';
 import Scanner from './Scanner';
 
-interface Props { onPick(i: Instrument, tf?: string): void; onClose(): void; watch: ReturnType<typeof useWatchlist>; paper: ReturnType<typeof usePaper> }
+interface Props { onPick(i: Instrument, tf?: string): void; onClose(): void; watch: ReturnType<typeof useWatchlist>; paper: ReturnType<typeof usePaper>; market: MarketId; setMarket(m: MarketId): void }
 
 const OPT_TAB = 'options';
 const WATCH_TAB = 'watch';
@@ -83,11 +83,18 @@ function OptionsChain({ onPick }: { onPick(i: Instrument): void }) {
   );
 }
 
-export default function Markets({ onPick, onClose, watch, paper }: Props) {
-  const [tab, setTab] = useState(watch.list.length ? WATCH_TAB : CATEGORIES[0].id);
-  const [region, setRegion] = useState<'us' | 'in'>('us');
+export default function Markets({ onPick, onClose, watch, paper, market, setMarket }: Props) {
+  const cats = categoriesFor(market);
+  const [tab, setTab] = useState(watch.list.length ? WATCH_TAB : cats[0].id);
+  const [region, setRegion] = useState<'us' | 'in'>(market === 'US' ? 'us' : market === 'IN' ? 'in' : 'us');
+  const showOptions = market === 'IN' || market === 'US' || market === 'ALL';
+  // switching market: land on that market's first list, and on its own options
+  useEffect(() => {
+    setTab((t) => (t === WATCH_TAB || t === SCAN_TAB || (t === OPT_TAB && showOptions) || cats.some((c) => c.id === t) ? t : cats[0].id));
+    if (market === 'IN') setRegion('in'); else if (market === 'US') setRegion('us');
+  }, [market]); // eslint-disable-line react-hooks/exhaustive-deps
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
-  const cat = CATEGORIES.find((c) => c.id === tab);
+  const cat = cats.find((c) => c.id === tab);
   const items = tab === WATCH_TAB ? watch.list : cat?.items;
 
   useEffect(() => {
@@ -106,22 +113,24 @@ export default function Markets({ onPick, onClose, watch, paper }: Props) {
   return (
     <div className="modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="mk">
-        <div className="mk-head"><b>Markets</b><button className="mini" onClick={onClose}>✕ Close</button></div>
+        <div className="mk-head"><b>Markets</b>
+          <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} aria-label="Market">{MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+          <button className="mini" onClick={onClose}>✕ Close</button></div>
         <div className="mk-tabs">
           <button className={tab === WATCH_TAB ? 'on' : ''} onClick={() => setTab(WATCH_TAB)}>★ Watchlist{watch.list.length ? ` (${watch.list.length})` : ''}</button>
-          {CATEGORIES.map((c) => <button key={c.id} className={tab === c.id ? 'on' : ''} onClick={() => setTab(c.id)}>{c.label}</button>)}
-          <button className={tab === OPT_TAB ? 'on' : ''} onClick={() => setTab(OPT_TAB)}>Options</button>
+          {cats.map((c) => <button key={c.id} className={tab === c.id ? 'on' : ''} onClick={() => setTab(c.id)}>{c.label}</button>)}
+          {showOptions && <button className={tab === OPT_TAB ? 'on' : ''} onClick={() => setTab(OPT_TAB)}>Options</button>}
           <button className={tab === SCAN_TAB ? 'on' : ''} onClick={() => setTab(SCAN_TAB)}>🔎 Scanner</button>
         </div>
         <div className="mk-body">
           {tab === SCAN_TAB ? (
-            <Scanner watch={watch} onPick={(i, tf) => { onPick(i, tf); onClose(); }} />
+            <Scanner watch={watch} market={market} onPick={(i, tf) => { onPick(i, tf); onClose(); }} />
           ) : tab === OPT_TAB ? (
             <>
-              <div className="mk-bar">
+              {market === 'ALL' && <div className="mk-bar">
                 <button className={`mini ${region === 'us' ? 'on' : ''}`} onClick={() => setRegion('us')}>US options</button>
                 <button className={`mini ${region === 'in' ? 'on' : ''}`} onClick={() => setRegion('in')}>India options (NSE)</button>
-              </div>
+              </div>}
               {region === 'us'
                 ? <OptionsChain onPick={(i) => { onPick(i); onClose(); }} />
                 : <NseOptions paper={paper} onOpenUnderlying={(i) => { onPick(i); onClose(); }} />}
@@ -142,7 +151,7 @@ export default function Markets({ onPick, onClose, watch, paper }: Props) {
             </tbody></table>
           ) : <p className="small">Your watchlist is empty. Click the ☆ next to any symbol, or the ☆ button in the top bar.</p>}
         </div>
-        <div className="small" style={{ padding: '6px 12px' }}>Tip: the search box also finds any other symbol. Futures use Yahoo symbols (for example ES=F, GC=F).</div>
+        <div className="small" style={{ padding: '6px 12px' }}>Tip: the search box finds any other symbol in this market; pick <b>All markets</b> to search everywhere. Futures use Yahoo symbols (for example ES=F, GC=F).</div>
       </div>
     </div>
   );

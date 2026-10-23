@@ -74,6 +74,39 @@ function optionsPlugin(): Plugin {
     res.end('{"error":"quotes unavailable"}');
   };
 
+  // Latest headlines for a stock or fund (Google News RSS has no browser access, so it is fetched here): /api/news?q=Reliance+Industries&region=IN
+  const newsHandler = async (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(b: string): void }) => {
+    const u = new URL(req.url ?? '/', 'http://local');
+    const q = (u.searchParams.get('q') ?? '').trim().slice(0, 120);
+    const region = u.searchParams.get('region') === 'IN' ? 'IN' : 'US';
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    if (q.length < 2) { res.statusCode = 400; res.end('<error>no query</error>'); return; }
+    try {
+      const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-${region}&gl=${region}&ceid=${region}:en`, { headers });
+      if (r.ok) { res.end(await r.text()); return; }
+    } catch { /* fall through */ }
+    res.statusCode = 502;
+    res.end('<error>news unavailable</error>');
+  };
+
+  // Company fundamentals (profitability, debt, growth, analyst view): /api/fundamentals?symbol=TCS.NS
+  const fundHandler = async (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(b: string): void }) => {
+    const u = new URL(req.url ?? '/', 'http://local');
+    const symbol = u.searchParams.get('symbol');
+    res.setHeader('Content-Type', 'application/json');
+    if (!symbol || !/^[A-Za-z0-9.^=-]{1,15}$/.test(symbol)) { res.statusCode = 400; res.end('{"error":"bad symbol"}'); return; }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const s = await getSession(attempt > 0);
+        const r = await fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics,assetProfile,summaryDetail&crumb=${encodeURIComponent(s.crumb)}`, { headers: { ...headers, cookie: s.cookie } });
+        const body = await r.text();
+        if (r.ok) { res.end(body); return; }
+      } catch { /* retry with a fresh session */ }
+    }
+    res.statusCode = 502;
+    res.end('{"error":"fundamentals unavailable"}');
+  };
+
   const handler = async (req: { url?: string }, res: { statusCode: number; setHeader(k: string, v: string): void; end(b: string): void }) => {
     const u = new URL(req.url ?? '/', 'http://local');
     const symbol = u.searchParams.get('symbol');
@@ -94,8 +127,8 @@ function optionsPlugin(): Plugin {
   };
   return {
     name: 'yahoo-options',
-    configureServer(server) { server.middlewares.use('/api/options', handler); server.middlewares.use('/api/nse', nseHandler); server.middlewares.use('/api/quote', quoteHandler); },
-    configurePreviewServer(server) { server.middlewares.use('/api/options', handler); server.middlewares.use('/api/nse', nseHandler); server.middlewares.use('/api/quote', quoteHandler); },
+    configureServer(server) { server.middlewares.use('/api/options', handler); server.middlewares.use('/api/nse', nseHandler); server.middlewares.use('/api/quote', quoteHandler); server.middlewares.use('/api/news', newsHandler); server.middlewares.use('/api/fundamentals', fundHandler); },
+    configurePreviewServer(server) { server.middlewares.use('/api/options', handler); server.middlewares.use('/api/nse', nseHandler); server.middlewares.use('/api/quote', quoteHandler); server.middlewares.use('/api/news', newsHandler); server.middlewares.use('/api/fundamentals', fundHandler); },
   };
 }
 

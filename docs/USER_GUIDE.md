@@ -16,6 +16,8 @@ A beginner-friendly tour of TradeMaster: what you are looking at, how to read it
 8. [Testing before trusting](#8-testing-before-trusting)
 9. [Troubleshooting and FAQ](#9-troubleshooting-and-faq)
 10. [Glossary](#10-glossary)
+11. [My Portfolio](#11-my-portfolio)
+12. [World Markets](#12-world-markets)
 
 ---
 
@@ -42,6 +44,8 @@ The first time you open the app, a **guided tour** starts by itself. It dims the
 ---
 
 ## 2. A tour of the screen
+
+**Choosing your market.** The box left of the search field sets which market the app focuses on. **India** is the default, so the search suggestions, the Markets browser and the Scanner show Indian stocks (top 50), indices, ETFs, rupee pairs and NSE options. Pick **US**, **Crypto** or **Global** (forex, commodities, futures, world indices) to switch, or **All markets** for everything at once, the way the app worked before. Switching moves the chart to a sensible symbol of that market if the current one does not belong. If a search finds results only in another market, the list says so and one click searches everywhere.
 
 ![Main screen](screenshots/01-chart-ai-advisor.png)
 
@@ -292,3 +296,53 @@ No. TradeMaster is for analysis and practice only.
 ---
 
 *TradeMaster is an analytical tool, not a financial advisor. Trading involves risk, and past performance does not guarantee future results.*
+
+---
+
+## 11. My Portfolio
+
+Open it with **My Portfolio** in the top bar. It reviews the stocks and mutual funds you actually own. Everything is stored in your browser only; nothing is uploaded and nothing costs money.
+
+**Getting your holdings in**
+- **Add by hand:** quantity, buy price and (optionally) buy date. For a mutual fund, switch to *Mutual fund (India)* and enter the invested and current amounts shown in your app.
+- **Screenshot:** *Import → Upload screenshot(s)*. Take a screenshot of your holdings screen in Groww, Zerodha or any app. The text is read in your browser, then you confirm the stocks it found. Fund screens that show only profit and percentage work too (the invested amount is worked out from them).
+- **File or paste:** a CSV holdings export, or a table copied from a spreadsheet. Excel files should be saved as CSV first.
+- Two people can each keep a portfolio with **+ Person**.
+- The **market box** in the top bar (India by default) is the same one as on the Charts page. It sets which market the *Add a stock* search starts in, and which market the *Better alternatives* and *Top performers* lists use. Choose **All markets** in a search to look everywhere.
+
+**What you get (Overview tab)**
+- A report card (returns, risk, spread, momentum) and an investor style.
+- An **action plan** with Buy more / Hold / Trim / Sell / Review for each holding, a confidence level and the reason. Selling needs several warning signs together; buying needs a strong, not-stretched chart. Stocks also get a second opinion from the chart-pattern AI.
+- Signature stats: your result against simply buying the index on the same dates, an estimate of what a 5/10/20% market fall would cost, your biggest fall in the last year, how spread out you really are, and who is carrying or dragging the portfolio.
+- Bond funds are judged on their own return, not against the stock market.
+
+**Deep analysis tab:** pick any holding for a two-sided check.
+- *Technical analysis* (the chart): about ten standard indicators (moving averages, golden/death cross, MACD, RSI, Bollinger Bands, momentum, volume, 52-week range) each vote buy, neutral or sell, giving a rating from Strong Sell to Strong Buy, plus nearby support and resistance.
+- *Fundamental analysis* (the business, stocks): P/E, P/B, PEG, return on equity, margins, debt, current ratio, sales and profit growth and dividend, scored 0–100 with strengths, concerns and the analysts' view. Banks are judged without debt ratios.
+- *Fund check-up* (mutual funds): 1/3/5-year returns against the index, ups and downs, worst fall, return per unit of risk, how much of the market's rises and falls it captures, and how often it beat the index. The expense ratio and fund manager are not available for free; check them in your app.
+- The two are combined into one plain verdict, e.g. "a strong business, but the chart is weak right now: hold and wait". Business quality also feeds the action plan: a weak chart on a strong business becomes *Review*, not *Sell*.
+
+**Why & winners tab:**
+- *Why did my investments move?* For each holding it separates the market, its sector and the company itself ("mostly a sector story" or "mostly specific to this company"), shows what the business is doing (sales and profit growth), and groups the latest headlines by topic such as war, oil prices, interest rates, tariffs, earnings, price hikes, regulation and investor selling, with a plain note on how each usually affects a share. It also shows the news around the biggest one-day moves of the last three months. Bond funds are explained through interest rates.
+- *Top performers this year* matches what you own: the best of about 65 widely held large companies, and the best equity or bond funds from a shortlist. Press **Why?** on any row to see what drove it. Your own stocks show where they rank.
+- These are likely reasons pieced together from data, not proof of cause.
+
+**Better alternatives tab:** pick a holding you are thinking of selling to see popular stocks, ETFs and funds (and your watchlist) that did better and still look healthy, with their worst fall and how differently they move from your mix.
+
+**News tab:** latest headlines for every holding (or all together) with a keyword-based positive/negative hint.
+
+All of this is rule-based on price history. It cannot see company results, taxes or your goals, and it is not investment advice.
+
+---
+
+## 12. World Markets
+
+Open it with **World Markets** in the top bar. It compares the main stock index of 23 countries (India's Nifty 50, the S&P 500 and Nasdaq, the UK, Germany, France, Japan, China, Hong Kong, South Korea, Brazil and more).
+
+- **Pick a period:** 1M, 3M, 6M, **YTD** (this calendar year so far) or 1Y. Every line on the chart starts at 0% at the beginning of the period, so you see who gained or lost the most.
+- **Pick the countries:** click a row in the table or a name in the legend to add or remove it, or use the quick choices (Main markets, India vs US, Top 5, Bottom 5, Asia, Europe, Americas, All, None).
+- **Hover** over the chart to read every country's value on that day. The legend re-sorts as you move, and hovering a name thickens its line.
+- **Local currency or US dollars:** in dollars the currency's own move is included, which is the fair way to compare countries. A market can look strong at home and weak in dollars.
+- **The table** shows today, 1, 3 and 6 months, this year, 1 year, how far each index sits below its 1-year high, and how much it typically swings. Greener means stronger. Click a heading to sort, or **Chart** to open that index on the Charts page.
+
+The plain-words summary at the top tells you the best and weakest market for the period and where India ranks. Index figures are price levels without dividends, and past performance does not predict the future.

@@ -1,5 +1,5 @@
 // Cloudflare Worker that stands in for the Vite dev/preview proxy, so the static site can be hosted on GitHub Pages.
-// Routes: /api/yahoo/*, /api/yahoo-search/*, /api/quote, /api/options, /api/nse
+// Routes: /api/yahoo/*, /api/yahoo-search/*, /api/quote, /api/options, /api/nse, /api/news, /api/fundamentals
 
 const UA = { 'User-Agent': 'Mozilla/5.0' };
 const NSE_UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9', Accept: '*/*' };
@@ -70,6 +70,21 @@ async function route(u, extra) {
     if (!symbols.length) return json('{"error":"no symbols"}', 400, extra);
     const body = await yahooWithCrumb((crumb) => `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}&crumb=${encodeURIComponent(crumb)}`);
     return body ? json(body, 200, { ...extra, 'Cache-Control': 'no-store' }) : json('{"error":"quotes unavailable"}', 502, extra);
+  }
+
+  if (p === '/api/fundamentals') {
+    const symbol = q.get('symbol');
+    if (!symbol || !/^[A-Za-z0-9.^=-]{1,15}$/.test(symbol)) return json('{"error":"bad symbol"}', 400, extra);
+    const body = await yahooWithCrumb((crumb) => `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,defaultKeyStatistics,assetProfile,summaryDetail&crumb=${encodeURIComponent(crumb)}`);
+    return body ? json(body, 200, { ...extra, 'Cache-Control': 'public, max-age=900' }) : json('{"error":"fundamentals unavailable"}', 502, extra);
+  }
+
+  if (p === '/api/news') {
+    const term = (q.get('q') ?? '').trim().slice(0, 120);
+    const region = q.get('region') === 'IN' ? 'IN' : 'US';
+    if (term.length < 2) return json('{"error":"no query"}', 400, extra);
+    const r = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=en-${region}&gl=${region}&ceid=${region}:en`, { headers: UA });
+    return r.ok ? new Response(await r.text(), { status: 200, headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=300', ...extra } }) : json('{"error":"news unavailable"}', 502, extra);
   }
 
   if (p === '/api/options') {

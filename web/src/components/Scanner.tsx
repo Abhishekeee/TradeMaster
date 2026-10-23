@@ -2,19 +2,19 @@ import { useRef, useState } from 'react';
 import { fetchCandles } from '../data';
 import { runAnalysis } from '../engine/client';
 import { advise } from '../engine/patterns.js';
-import { CATEGORIES } from '../markets';
+import { categoriesFor, type MarketId } from '../markets';
 import type { useWatchlist } from '../watchlist';
 import type { Advice, Instrument } from '../types';
 
 interface Row { inst: Instrument; pattern: string; score: number; eff: number; candle: string; candleScore: number; action: Advice['action']; conf: number }
-interface Props { watch: ReturnType<typeof useWatchlist>; onPick(i: Instrument, tf: string): void }
+interface Props { watch: ReturnType<typeof useWatchlist>; onPick(i: Instrument, tf: string): void; market?: MarketId }
 
 const TFS = ['15m', '1h', '4h', '1D'];
 const col = (x: number) => (x > 0.1 ? 'up' : x < -0.1 ? 'down' : 'neu');
 
 /** Scans a whole list of markets for the best pattern and AI setup right now. */
-export default function Scanner({ watch, onPick }: Props) {
-  const universes = [...(watch.list.length ? [{ id: 'watch', label: '★ Watchlist', items: watch.list }] : []), ...CATEGORIES.map((c) => ({ id: c.id, label: c.label, items: c.items }))];
+export default function Scanner({ watch, onPick, market = 'ALL' }: Props) {
+  const universes = [...(watch.list.length ? [{ id: 'watch', label: '★ Watchlist', items: watch.list }] : []), ...categoriesFor(market).map((c) => ({ id: c.id, label: c.label, items: c.items }))];
   const [uni, setUni] = useState(universes[0].id);
   const [tf, setTf] = useState('1h');
   const [busy, setBusy] = useState(false);

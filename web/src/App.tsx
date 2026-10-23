@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ChartView, { type ChartApi } from './components/ChartView';
 import Menu from './components/Menu';
+import Nav from './components/Nav';
 import Panel from './components/Panel';
 import Trade, { type Prefill } from './components/Trade';
 import Alerts from './components/Alerts';
@@ -17,6 +18,7 @@ import Markets from './components/Markets';
 import { usePaper, netPnl } from './paper';
 import { CURRENCIES, makeCurrency, useFx } from './fx';
 import SymbolSearch from './components/SymbolSearch';
+import { DEFAULT_INST, MARKETS, inMarket, type MarketId } from './markets';
 import { currencyOf, demoData, fetchCandles, fetchHistory, openFeed, openTicks, type FeedStatus } from './data';
 import { setPrice as pushPrice } from './priceStore';
 import LiveBar from './components/LiveBar';
@@ -31,7 +33,22 @@ function loadPrefs() {
 
 export default function App() {
   const prefs = useMemo(loadPrefs, []);
-  const [inst, setInst] = useState<Instrument>(prefs.inst ?? { id: 'BTCUSDT', name: 'Crypto · Binance', source: 'binance', kind: 'CRYPTO' });
+  // India is the default market. Someone who has never chosen one starts on an Indian stock, not on whatever they last viewed.
+  // A saved choice wins: a chart opened from the portfolio page keeps its market, or falls back to All markets.
+  const start = useMemo(() => {
+    const saved: Instrument | undefined = prefs.inst;
+    if (MARKETS.some((m) => m.id === prefs.market)) {
+      const m: MarketId = prefs.market;
+      return saved ? { market: (inMarket(saved, m) ? m : 'ALL') as MarketId, inst: saved } : { market: m, inst: DEFAULT_INST[m] };
+    }
+    return { market: 'IN' as MarketId, inst: saved && inMarket(saved, 'IN') ? saved : DEFAULT_INST.IN };
+  }, [prefs]);
+  const [market, setMarketState] = useState<MarketId>(start.market);
+  const [inst, setInst] = useState<Instrument>(start.inst);
+  const setMarket = useCallback((m: MarketId) => {
+    setMarketState(m);
+    setInst((cur) => (inMarket(cur, m) ? cur : DEFAULT_INST[m]));
+  }, []);
   const symbol = inst.id;
   const [tf, setTf] = useState<string>(TFS.some((t) => t[0] === prefs.tf) ? prefs.tf : '1h');
   const [type, setType] = useState<'candles' | 'line' | 'area'>('candles');
@@ -125,7 +142,7 @@ export default function App() {
       await analyse(true);
       if (!cancelled) setLoading(false);
     })();
-    try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display })); } catch { /* ignore */ }
+    try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display, market })); } catch { /* ignore */ }
     return () => { cancelled = true; };
   }, [inst, tf, analyse]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -170,8 +187,8 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display })); } catch { /* ignore */ }
-  }, [theme, inst, tf, display]);
+    try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display, market })); } catch { /* ignore */ }
+  }, [theme, inst, tf, display, market]);
 
   // the advisor judges a setup by how that pattern performed here before (backtest on up to 5000 candles)
   useEffect(() => {
@@ -328,9 +345,8 @@ export default function App() {
       <p>This one-minute tour shows what each part does. Everything you trade here uses <b>virtual money</b>, so you can experiment freely.</p>
       <p className="tour-hint">Use the arrow keys or the buttons. Press Esc to leave at any time.</p></> },
     { target: '.symsearch', placement: 'bottom', title: 'Search any market', body: <>
-      <p>Type a name or symbol, then pick a result:</p>
-      <p><code>BTCUSDT</code> <code>AAPL</code> <code>RELIANCE.NS</code> <code>EURUSD=X</code> <code>gold</code> <code>nifty</code></p>
-      <p>Crypto, stocks, forex, commodities, futures and indices all work.</p></> },
+      <p>Type a name or symbol, then pick a result. India is selected by default; use the market box on its left to switch to US, crypto, global markets or <b>All markets</b>.</p>
+      <p><code>RELIANCE</code> <code>TCS</code> <code>nifty</code> · in US / All: <code>AAPL</code> <code>gold</code> <code>EURUSD=X</code> <code>BTCUSDT</code></p></> },
     { target: '[data-tour="markets"]', placement: 'bottom', title: 'Browse, scan and watch', body: <>
       <p><b>Markets</b> lists live prices by category, shows US and India (NSE) option chains, keeps your watchlist, and has a <b>Scanner</b> that ranks a whole market by chart patterns.</p></> },
     { target: '.seg', placement: 'bottom', title: 'Choose a timeframe', body: <>
@@ -361,7 +377,7 @@ export default function App() {
       <p><b>LIVE</b> means prices are streaming. The clock counts down to the end of the current candle.</p>
       <p><b>MARKET CLOSED</b>, <b>DELAYED</b> or <b>DEMO DATA</b> tell you when the data is not fresh.</p></> },
     { title: "You're ready", placement: 'center', before: () => setRtab('advisor'), body: <>
-      <p>Try it: search <code>BTCUSDT</code>, open the <b>AI</b> tab, press <b>Send to paper ticket</b>, then watch your position in the <b>Trade</b> tab.</p>
+      <p>Try it: search <code>RELIANCE</code>, open the <b>AI</b> tab, press <b>Send to paper ticket</b>, then watch your position in the <b>Trade</b> tab.</p>
       <p>You can replay this tour any time with <b>? Tour</b> in the top bar.</p></> },
   ], []);
 
@@ -385,7 +401,11 @@ export default function App() {
     <>
       <header className="topbar">
         <div className="logo">Trade<b>Master</b></div>
-        <SymbolSearch current={inst} onPick={setInst} />
+        <Nav page="charts" />
+        <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={MARKETS.find((m) => m.id === market)?.hint} aria-label="Market" data-tour="market">
+          {MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+        <SymbolSearch current={inst} onPick={setInst} market={market} onMarket={setMarket} />
         <button className="theme" title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>
         <button className="theme" data-tour="markets" title="Browse stocks, forex, commodities, futures, options" onClick={() => setShowMarkets(true)}>▦ Markets</button>
         <div className="seg">
@@ -404,7 +424,7 @@ export default function App() {
       </header>
 
       <Tour open={tourOpen} steps={tourSteps} onClose={closeTour} />
-      {showMarkets && <Markets onPick={(i, t) => { setInst(i); if (t) setTf(t); }} onClose={() => setShowMarkets(false)} watch={watch} paper={paper} />}
+      {showMarkets && <Markets onPick={(i, t) => { setInst(i); if (t) setTf(t); }} onClose={() => setShowMarkets(false)} watch={watch} paper={paper} market={market} setMarket={setMarket} />}
 
       <div className="layout">
         {analysis
