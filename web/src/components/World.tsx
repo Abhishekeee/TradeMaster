@@ -7,7 +7,7 @@ import { COUNTRIES, PERIODS, PERIOD_NAME, periodStart, priceSeries, rebased, sta
 
 const COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#17becf', '#8c6bb1', '#d6616b'];
 const colorOf = (sym: string) => (sym === '^NSEI' ? '#ff9933' : COLORS[(COUNTRIES.findIndex((c) => c.sym === sym) + 3) % COLORS.length]);
-const THEMES = { dark: { bg: '#1e222d', text: '#b2b5be', grid: '#2a2e39' }, light: { bg: '#f0f3fa', text: '#434651', grid: '#dfe3ee' } };
+const THEMES = { dark: { bg: 'rgba(0,0,0,0)', text: '#9096b8', grid: 'rgba(255,255,255,0.05)' }, light: { bg: 'rgba(0,0,0,0)', text: '#5a6082', grid: 'rgba(30,34,80,0.08)' } };
 const KEY = 'tm-world';
 const DEFAULT_SEL = ['^NSEI', '^GSPC', '^FTSE', '^GDAXI', '^N225', '000001.SS', '^HSI'];
 
@@ -178,7 +178,7 @@ export default function World() {
           <div className="wd-wrap">
             <div className="wd-chartbox">
               {lines.length ? <WorldChart lines={lines} highlight={hot} theme={theme} onHover={setHover} /> : <div className="wd-chart wd-empty small">{wait ? 'Loading currency rates…' : 'Pick some countries below, or use a quick choice above.'}</div>}
-              <p className="small wd-hint">Move the mouse over the chart to read every line on that day. Each line starts at 0% at the beginning of {PERIOD_NAME[period]}.</p>
+              <p className="small wd-hint">Hover the chart to compare every line on a day.</p>
             </div>
             <div className="wd-legend">
               <div className="small wd-when">{when ?? `Latest · ${PERIOD_NAME[period]}`}</div>
@@ -197,7 +197,7 @@ export default function World() {
 
         <section className="pf-box">
           <h3>Every market, side by side</h3>
-          <p className="small">Click a row to add it to or remove it from the chart. Click a column heading to sort. Greener means stronger, redder means weaker.</p>
+          <p className="small">Click a row to plot it. Click a heading to sort.</p>
           <div className="pf-scroll">
             <table className="pf-table wd-table">
               <thead><tr><th></th>{th('country', 'Country', 'l')}<th>Index</th><th className="r">Level</th>{th('day', 'Today')}{th('m1', '1 month')}{th('m3', '3 months')}{th('m6', '6 months')}{th('ytd', 'This year')}{th('y1', '1 year')}{th('fromHigh', 'From 1-yr high')}{th('swing', 'Ups & downs')}<th></th></tr></thead>

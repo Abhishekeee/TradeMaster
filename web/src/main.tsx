@@ -7,6 +7,7 @@ import Home from './components/Home';
 import { pageFromHash } from './components/Nav';
 import { initCloud } from './cloud';
 import './style.css';
+import './ui.css';
 
 function Shell() {
   const [page, setPage] = useState(pageFromHash);

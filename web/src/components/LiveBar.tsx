@@ -5,6 +5,7 @@ import { fmt, TF_SEC } from '../types';
 interface Props {
   status: FeedStatus; demo: boolean; px: number | null; ch: number | null;
   lastTick: number; candleTime: number | null; tf: string; unit?: string; approx?: string;
+  symbol?: string; name?: string; kind?: string; tfLabel?: string; leading?: React.ReactNode;
 }
 
 const TEXT: Record<FeedStatus, string> = { live: 'LIVE', connecting: 'CONNECTING', polling: 'RECONNECTING', closed: 'MARKET CLOSED', off: '' };
@@ -16,7 +17,7 @@ function clock(sec: number) {
   return d ? `${d}d ${p(h)}h` : h ? `${h}:${p(m)}:${p(r)}` : `${p(m)}:${p(r)}`;
 }
 
-export default function LiveBar({ status, demo, px, ch, lastTick, candleTime, tf, unit, approx }: Props) {
+export default function LiveBar({ status, demo, px, ch, lastTick, candleTime, tf, unit, approx, symbol, name, kind, tfLabel, leading }: Props) {
   const [now, setNow] = useState(Date.now());
   const prev = useRef<number | null>(null);
   const [flash, setFlash] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
@@ -37,11 +38,19 @@ export default function LiveBar({ status, demo, px, ch, lastTick, candleTime, tf
 
   return (
     <div className="price">
-      {showClock && <span className="small" title="Time until this candle closes">⏱ {clock(left as number)}</span>}
+      {symbol && (
+        <span className="sym">
+          {leading}
+          <span className="symtxt">
+            <b>{name && name !== symbol ? name : symbol}</b>
+            <small>{[symbol, kind ? kind.charAt(0) + kind.slice(1).toLowerCase() : '', tfLabel ? tfLabel + ' chart' : ''].filter(Boolean).join(' · ')}</small>
+          </span>
+        </span>
+      )}
       <span key={flash?.n ?? 0} className={flash ? `flash-${flash.dir}` : ''}>{px !== null ? fmt(px) : '–'}</span>
       {unit && px !== null && <span className="small">{unit}</span>}
+      {ch !== null && <span id="chg" className={ch >= 0 ? 'up' : 'down'}>{ch >= 0 ? '▲' : '▼'} {Math.abs(ch).toFixed(2)}%</span>}
       {approx && <span className="small" title="Converted at the live exchange rate">{approx}</span>}
-      {ch !== null && <span id="chg" className={ch >= 0 ? 'up' : 'down'}>{ch >= 0 ? '+' : ''}{ch.toFixed(2)}%</span>}
       {demo
         ? <span className="livebadge off">DEMO DATA</span>
         : status !== 'off' && (
@@ -49,6 +58,7 @@ export default function LiveBar({ status, demo, px, ch, lastTick, candleTime, tf
             <i className="pulse" />{stale ? 'DELAYED' : TEXT[status]}{(status === 'live' || stale) && lastTick ? <span className="age"> · {age < 2 ? 'now' : `${age}s`}</span> : null}
           </span>
         )}
+      {showClock && <span className="small" title="Time until this candle closes">⏱ {clock(left as number)}</span>}
     </div>
   );
 }

@@ -166,14 +166,13 @@ export default function Portfolio() {
         {!holdings.length ? (
           <div className="empty pf-empty">
             <h2>Analyse your portfolio</h2>
-            <p>Add the stocks you own (quantity, buy price and, if you remember, the buy date) or import them from your broker app.<br />
-              You will see which holdings are performing well, which are lagging the market, and a plain-words suggestion for each.</p>
+            <p style={{ fontSize: 15 }}>Add your stocks and get a clear hold / buy / sell call for each.</p>
             <div className="pf-row" style={{ justifyContent: 'center' }}>
               <button className="mini on" onClick={() => setPanel('add')}>+ Add a stock</button>
               <button className="mini" onClick={() => setPanel('import')}>⇪ Import from my broker</button>
               <button className="mini" onClick={addSample}>Try with example stocks</button>
             </div>
-            <p className="small">Everything stays in this browser unless you sign in, and nothing costs money. <SaveHint /></p>
+            <p className="small">Private to this browser unless you sign in. <SaveHint /></p>
           </div>
         ) : (
           <>

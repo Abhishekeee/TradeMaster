@@ -12,8 +12,8 @@ interface Props {
 }
 
 const THEMES = {
-  dark: { bg: '#131722', text: '#b2b5be', grid: '#1c202b', border: '#2a2e39' },
-  light: { bg: '#ffffff', text: '#434651', grid: '#eef0f5', border: '#dfe3ee' },
+  dark: { bg: 'rgba(0,0,0,0)', text: '#9096b8', grid: 'rgba(255,255,255,0.045)', border: 'rgba(255,255,255,0.09)' },
+  light: { bg: 'rgba(0,0,0,0)', text: '#5a6082', grid: 'rgba(30,34,80,0.07)', border: 'rgba(30,34,80,0.12)' },
 };
 
 /** A small synchronized chart under the price chart (RSI or MACD). */

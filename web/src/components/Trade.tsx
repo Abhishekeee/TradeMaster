@@ -459,28 +459,29 @@ export default function Trade({ inst, price: priceProp, prices: pricesProp, pape
       </div>
       <div className="card">
         {acc.history.length ? (
-          <table className="hist"><tbody>
-            <tr><th>Closed</th><th>Symbol</th><th>Result</th><th>Net P&amp;L</th></tr>
+          <div className="hist2">
             {acc.history.slice(0, 15).map((h) => {
               const co = coach[h.id];
-              return [
-                <tr key={h.id}>
-                  <td className="small">{new Date(h.exitTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}</td>
-                  <td><b>{h.inst.id}</b> <span className={h.side === 'long' ? 'up' : 'down'}>{h.side === 'long' ? '▲' : '▼'}</span></td>
-                  <td>
+              return (
+                <div key={h.id} className="hrow">
+                  <div className="hrow-top">
+                    <div className="hrow-sym"><b>{h.inst.id}</b> <span className={h.side === 'long' ? 'up' : 'down'}>{h.side === 'long' ? '▲ Long' : '▼ Short'}</span><span className="small"> · {new Date(h.exitTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span></div>
+                    <b className={col(h.pnl)}>{cur.signed(h.pnl)}</b>
+                  </div>
+                  <div className="hrow-bot">
                     <span className={`chip ${h.reason}`}>{h.reason === 'stop' ? 'Stop hit' : h.reason === 'target' ? 'Target hit' : 'Closed'}</span>
-                    <div><button className="lvl-link" onClick={() => { setShown((s) => ({ ...s, [h.id]: !s[h.id] })); review(h); }}>{shown[h.id] ? 'Hide' : h.pnl > 0 ? 'Why it worked' : 'What went wrong'}</button></div>
-                  </td>
-                  <td className={col(h.pnl)}><b>{cur.signed(h.pnl)}</b>{h.fees !== undefined && h.gross !== undefined && <div className="small" title="Profit before fees, and total fees paid">gross {cur.signed(h.gross)} · fees −{cur.money(h.fees)}</div>}</td>
-                </tr>,
-                shown[h.id] && (
-                  <tr key={h.id + 'c'}><td colSpan={4} className={`coach ${co && co !== 'loading' ? co.tone : ''}`}>
-                    {!co || co === 'loading' ? 'Checking the chart…' : <><b>{co.text}</b>{co.tip && <div>{co.tip}</div>}</>}
-                  </td></tr>
-                ),
-              ];
+                    {h.fees !== undefined && h.gross !== undefined && <span className="small" title="Profit before fees, and total fees paid">gross {cur.signed(h.gross)} · fees −{cur.money(h.fees)}</span>}
+                    <button className="lvl-link" onClick={() => { setShown((x) => ({ ...x, [h.id]: !x[h.id] })); review(h); }}>{shown[h.id] ? 'Hide' : h.pnl > 0 ? 'Why it worked' : 'What went wrong'}</button>
+                  </div>
+                  {shown[h.id] && (
+                    <div className={`coach ${co && co !== 'loading' ? co.tone : ''}`}>
+                      {!co || co === 'loading' ? 'Checking the chart…' : <><b>{co.text}</b>{co.tip && <div>{co.tip}</div>}</>}
+                    </div>
+                  )}
+                </div>
+              );
             })}
-          </tbody></table>
+          </div>
         ) : <span className="small">Closed trades will appear here.</span>}
       </div>
       <p className="disc">Paper trading with virtual money and live prices. Real trading results will differ.</p>

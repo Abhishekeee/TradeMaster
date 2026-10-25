@@ -9,86 +9,101 @@ interface Props {
 const cls = (a: Advice['action']) => (a === 'BUY' ? 'up' : a === 'SELL' ? 'down' : 'neu');
 const pct = (a: number, b: number) => `${a >= b ? '+' : '−'}${Math.abs(((a - b) / b) * 100).toFixed(2)}%`;
 
+function Ring({ value }: { value: number }) {
+  const r = 38, c = 2 * Math.PI * r;
+  return (
+    <div className="ring" title="How sure the advisor is">
+      <svg viewBox="0 0 90 90"><circle className="trk" cx="45" cy="45" r={r} /><circle className="val" cx="45" cy="45" r={r} strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0, Math.min(100, value)) / 100)} /></svg>
+      <b>{value}<small>%</small></b>
+    </div>
+  );
+}
+
 export default function Advisor({ advice: a, inst, tf, historyReady, strat, showOnChart, setShowOnChart, onSend }: Props) {
-  if (!a) return <aside className="panel"><p className="small">Waiting for enough price history to analyse…</p></aside>;
+  if (!a) return (
+    <aside className="panel" aria-busy="true">
+      <div className="adv-hero">
+        <div style={{ flex: 1, position: 'relative' }}>
+          <div className="hud-k">AI advisor · {tf}</div>
+          <div className="sk" style={{ width: 120, height: 30, marginTop: 8 }} />
+          <div className="sk" style={{ width: 170, height: 12, marginTop: 12 }} />
+        </div>
+        <div className="ring"><svg viewBox="0 0 90 90"><circle className="trk" cx="45" cy="45" r="38" /><circle className="val spin" cx="45" cy="45" r="38" strokeDasharray="60 180" /></svg></div>
+      </div>
+      <div className="ladder">{[0, 1, 2, 3].map((i) => <div key={i} className="sk" style={{ height: 40, borderRadius: 12, animationDelay: `${i * 0.12}s` }} />)}</div>
+      <p className="small" style={{ textAlign: 'center' }}>Reading the chart, checking past results and the bigger trend…</p>
+    </aside>
+  );
   const isOpt = inst.kind === 'OPTION';
-  const verb = a.action === 'BUY' ? (isOpt ? 'BUY' : 'BUY / LONG') : a.action === 'SELL' ? (isOpt ? 'SELL' : 'SELL / SHORT') : 'WAIT';
+  const verb = a.action === 'BUY' ? (isOpt ? 'BUY' : 'BUY') : a.action === 'SELL' ? (isOpt ? 'SELL' : 'SELL') : 'WAIT';
+  const plan = a.action !== 'WAIT' && a.sl !== null && a.tp1 !== null && a.tp2 !== null;
 
   return (
     <aside className="panel">
-      <h3>AI advisor · {inst.id} {tf}</h3>
-      <div className={`card advcard ${cls(a.action)}`}>
-        <div className={`advbig ${cls(a.action)}`}>{verb}</div>
-        <div className="small">{a.action === 'WAIT' ? 'No clear edge right now' : a.setup ? `Setup: ${a.setup}` : 'Setup: trend and candle signals'}</div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <span className="small">Confidence</span>
-          <b>{a.conf}% · {a.level}</b>
+      <div className={`adv-hero ${cls(a.action)}`}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <div className="hud-k">AI advisor · {tf}</div>
+          <div className={`adv-verb ${cls(a.action)}`} style={{ marginTop: 6 }}>{verb}</div>
+          <div className="adv-sub">{a.action === 'WAIT' ? 'No clear edge right now' : `${a.level} confidence${a.setup ? ` · ${a.setup}` : ''}`}</div>
         </div>
-        <div className="bar"><i className={a.conf >= 70 ? 'up' : a.conf >= 50 ? 'neu' : 'down'} style={{ width: `${a.conf}%` }} /></div>
+        <Ring value={a.conf} />
       </div>
 
-      {a.action !== 'WAIT' && a.sl !== null && a.tp1 !== null && a.tp2 !== null && (<>
-        <h3>Trade plan</h3>
-        <div className="card">
-          <table className="kv"><tbody>
-            <tr><td>Entry (market)</td><td>{fmt(a.entry)}</td></tr>
-            <tr><td>Stop loss</td><td className="down">{fmt(a.sl)} <span className="small">({pct(a.sl, a.entry)})</span></td></tr>
-            <tr><td>Target 1 (1.5R)</td><td className="up">{fmt(a.tp1)} <span className="small">({pct(a.tp1, a.entry)})</span></td></tr>
-            <tr><td>Target 2</td><td className="up">{fmt(a.tp2)} <span className="small">({pct(a.tp2, a.entry)})</span></td></tr>
-            <tr><td>Reward : risk (T2)</td><td>{a.rr.toFixed(1)} : 1</td></tr>
-          </tbody></table>
-          <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={showOnChart} onChange={(e) => setShowOnChart(e.target.checked)} /> Draw these levels on the chart</label>
-          <button className="act" style={{ marginTop: 8 }} onClick={onSend}>Send to paper ticket →</button>
+      {plan && (<>
+        <div className="ladder">
+          <div className="rung tp"><span>Target 2</span><b>{fmt(a.tp2 as number)}</b><em>{pct(a.tp2 as number, a.entry)}</em></div>
+          <div className="rung tp"><span>Target 1</span><b>{fmt(a.tp1 as number)}</b><em>{pct(a.tp1 as number, a.entry)}</em></div>
+          <div className="rung en"><span>Entry</span><b>{fmt(a.entry)}</b><em style={{ color: 'var(--mute)' }}>now</em></div>
+          <div className="rung sl"><span>Stop</span><b>{fmt(a.sl as number)}</b><em>{pct(a.sl as number, a.entry)}</em></div>
         </div>
+        <div className="rr"><span>Reward : risk</span><b>{a.rr.toFixed(1)} : 1</b></div>
+        <button className="cta" onClick={onSend}>Send to paper trade →</button>
+        <label className="chk" style={{ margin: '10px 2px 4px', fontSize: 12 }}><input type="checkbox" checked={showOnChart} onChange={(e) => setShowOnChart(e.target.checked)} /> Show levels on chart</label>
 
         {a.option && (
-          <>
-            <h3>If trading options</h3>
-            <div className="card">
-              <div className="big"><span className={a.option.type === 'CALL' ? 'up' : 'down'}>Buy {a.option.type}</span> <span className="small">≈ {fmt(a.option.strike)} strike</span></div>
-              <div className="small">Expiry: {a.option.expiry}</div>
-              <p className="small">{a.option.note}</p>
-            </div>
-          </>
+          <div className="card" style={{ marginTop: 10 }}>
+            <div className="hud-k">If trading options</div>
+            <div className="big" style={{ marginTop: 4 }}><span className={a.option.type === 'CALL' ? 'up' : 'down'}>Buy {a.option.type}</span> <span className="small">≈ {fmt(a.option.strike)} · {a.option.expiry}</span></div>
+          </div>
         )}
       </>)}
 
-      <h3>Why</h3>
-      <div className="card">
-        <ul>{a.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
-      </div>
+      <h3 style={{ marginTop: 16 }}>Why</h3>
+      <div className="reasons">{a.reasons.map((r) => <span key={r}>{r}</span>)}{a.warnings.map((w) => <span key={w} className="w" title={w}>⚠ {w.length > 62 ? `${w.slice(0, 60)}…` : w}</span>)}</div>
 
-      <h3>Track record of this setup</h3>
-      <div className="card">
-        {a.history ? (
-          <>
+      <details className="more">
+        <summary>Track record of this setup</summary>
+        <div>
+          {a.history ? (<>
             <b>{a.history.name}</b> on {inst.id} {tf}: {a.history.n} past trades, <b>{a.history.winRate.toFixed(0)}%</b> won
             <div className={a.history.edge >= 3 ? 'up' : a.history.edge <= -3 ? 'down' : 'neu'}>
-              {a.history.edge >= 3 ? 'Beat' : a.history.edge <= -3 ? 'Lost to' : 'About equal to'} a blind guess ({a.history.edge > 0 ? '+' : ''}{a.history.edge.toFixed(0)} points)
+              {a.history.edge >= 3 ? 'Beat' : a.history.edge <= -3 ? 'Lost to' : 'About equal to'} a blind guess ({a.history.edge > 0 ? '+' : ''}{a.history.edge.toFixed(0)} pts)
             </div>
-          </>
-        ) : <span className="small">{historyReady ? 'This pattern has not appeared enough times in the loaded history.' : 'Checking the past performance of this pattern…'}</span>}
-      </div>
+          </>) : <span className="small">{historyReady ? 'Not enough past examples of this pattern here.' : 'Checking past performance…'}</span>}
+        </div>
+      </details>
 
-      <h3>Strategy check on this chart</h3>
-      <div className="card">
-        {strat ? (() => {
-          const v = verdictOf(strat);
-          return (<>
-            <b className={v.cls}>{strat.n} past trades: profit factor {Number.isFinite(strat.profitFactor) ? strat.profitFactor.toFixed(2) : '∞'}, {strat.returnPct >= 0 ? '+' : ''}{strat.returnPct.toFixed(1)}% vs {strat.buyHold >= 0 ? '+' : ''}{strat.buyHold.toFixed(1)}% buy &amp; hold</b>
-            <div className="small" style={{ marginTop: 4 }}>{v.text} See the Stats tab to test other settings.</div>
-          </>);
-        })() : <span className="small">Replaying the advisor on past candles…</span>}
-      </div>
+      <details className="more">
+        <summary>Strategy check</summary>
+        <div>
+          {strat ? (() => {
+            const v = verdictOf(strat);
+            return (<>
+              <b className={v.cls}>{strat.n} trades · profit factor {Number.isFinite(strat.profitFactor) ? strat.profitFactor.toFixed(2) : '∞'} · {strat.returnPct >= 0 ? '+' : ''}{strat.returnPct.toFixed(1)}% vs {strat.buyHold >= 0 ? '+' : ''}{strat.buyHold.toFixed(1)}% buy &amp; hold</b>
+              <div className="small" style={{ marginTop: 4 }}>{v.text}</div>
+            </>);
+          })() : <span className="small">Replaying the advisor on past candles…</span>}
+        </div>
+      </details>
 
-      {a.warnings.length > 0 && (<>
-        <h3>Watch out</h3>
-        <div className="card warn"><ul>{a.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
-      </>)}
+      {a.warnings.length > 0 && (
+        <details className="more">
+          <summary>All warnings ({a.warnings.length})</summary>
+          <div><ul style={{ margin: 0, paddingLeft: 16 }}>{a.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>
+        </details>
+      )}
 
-      <p className="disc">
-        This advisor is rules and statistics, not a language model or a crystal ball. It combines pattern match, trend, RSI, candle signals and swing levels, then lowers its confidence when the same pattern lost money here in the past. Stop and target levels come from swing structure and recent volatility. No setup wins every time. Test it in paper trading first and risk only what you can afford to lose.
-      </p>
+      <p className="disc">Rules and statistics, not a prediction. Practise in paper trading first.</p>
     </aside>
   );
 }

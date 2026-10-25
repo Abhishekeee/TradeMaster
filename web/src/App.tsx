@@ -23,6 +23,7 @@ import { DEFAULT_INST, MARKETS, inMarket, type MarketId } from './markets';
 import { currencyOf, demoData, fetchCandles, fetchHistory, openFeed, openTicks, type FeedStatus } from './data';
 import { setPrice as pushPrice } from './priceStore';
 import LiveBar from './components/LiveBar';
+import Timeframe from './components/Timeframe';
 import { runAnalysis, runBacktest, runStrategy } from './engine/client';
 import { TFS, cls, fmt, word, type Advice, type Analysis, type BacktestResult, type StrategyResult, type Candle, type Instrument, type MtfRow, type Signal } from './types';
 
@@ -71,6 +72,26 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(prefs.theme === 'light' ? 'light' : 'dark');
   const [showMarkets, setShowMarkets] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [showMenu, setShowMenuState] = useState<boolean>(() => { try { return localStorage.getItem('tm-menu') === '1'; } catch { return false; } });
+  const [showSide, setShowSideState] = useState<boolean>(() => { try { return localStorage.getItem('tm-side') !== '0'; } catch { return true; } });
+  const setShowSide = useCallback((v: boolean) => { setShowSideState(v); try { localStorage.setItem('tm-side', v ? '1' : '0'); } catch { /* ignore */ } }, []);
+  // side panel widths: drag the divider to resize, double-click it to reset
+  const [lw, setLw] = useState<number>(() => { try { return +(localStorage.getItem('tm-lw') || 290) || 290; } catch { return 290; } });
+  const [rw, setRw] = useState<number>(() => { try { return +(localStorage.getItem('tm-rw') || 372) || 372; } catch { return 372; } });
+  const drag = useCallback((side: 'l' | 'r') => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = side === 'l' ? lw : rw, [lo, hi] = side === 'l' ? [220, 480] : [300, 680];
+    let w = w0;
+    const move = (m: PointerEvent) => { w = Math.max(lo, Math.min(hi, w0 + (side === 'l' ? m.clientX - x0 : x0 - m.clientX))); (side === 'l' ? setLw : setRw)(w); };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.classList.remove('resizing');
+      try { localStorage.setItem(side === 'l' ? 'tm-lw' : 'tm-rw', String(w)); } catch { /* ignore */ }
+    };
+    document.body.classList.add('resizing');
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  }, [lw, rw]);
+  const resetW = (side: 'l' | 'r') => { (side === 'l' ? setLw : setRw)(side === 'l' ? 290 : 372); try { localStorage.removeItem(side === 'l' ? 'tm-lw' : 'tm-rw'); } catch { /* ignore */ } };
+  const setShowMenu = useCallback((v: boolean) => { setShowMenuState(v); try { localStorage.setItem('tm-menu', v ? '1' : '0'); } catch { /* ignore */ } }, []);
   const [preview, setPreview] = useState<Record<string, PreviewLine[]>>({});
   const onPreview = useCallback((key: string, lines: PreviewLine[]) => {
     setPreview((p) => {
@@ -85,6 +106,7 @@ export default function App() {
   const [bt, setBt] = useState<BacktestResult | null>(null);
   const [strat, setStrat] = useState<StrategyResult | null>(null);
   const [htf, setHtf] = useState<{ tf: string; bias: number; label: string } | null>(null);
+  const [htfDone, setHtfDone] = useState(false); // the advisor waits for this so its verdict doesn't flip once the bigger timeframe arrives
   const [showAdvice, setShowAdvice] = useState(true);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [prices, setPrices] = useState<Record<string, number>>({});
@@ -209,21 +231,24 @@ export default function App() {
   // the bigger picture: what does the next timeframe up say?
   useEffect(() => {
     const up = HIGHER[tf];
-    setHtf(null);
-    if (loading || demo || !up) return;
+    setHtf(null); setHtfDone(false);
+    if (loading) return;
+    if (demo || !up) { setHtfDone(true); return; }
     let dead = false;
     (async () => {
-      const c = await fetchCandles(inst, up, 400);
-      if (!c || dead) return;
-      const { analysis: h } = await runAnalysis(c, false);
-      if (h && !dead) setHtf({ tf: up, bias: h.bias, label: h.label });
+      try {
+        const c = await fetchCandles(inst, up, 400);
+        if (!c || dead) return;
+        const { analysis: h } = await runAnalysis(c, false);
+        if (h && !dead) setHtf({ tf: up, bias: h.bias, label: h.label });
+      } finally { if (!dead) setHtfDone(true); }
     })();
     return () => { dead = true; };
   }, [inst, tf, loading, demo]);
 
   const advice: Advice | null = useMemo(() => {
     const c = candles.current;
-    if (!analysis || c.length < 60) return null;
+    if (!analysis || c.length < 60 || !bt || !strat || !htfDone) return null; // show "reading the chart" until every input is in
     const base = advise(c.slice(-500), analysis, bt, { tf, strat, isOption: inst.kind === 'OPTION', step: inst.id === '^NSEI' ? 50 : inst.id === '^NSEBANK' ? 100 : undefined }) as Advice;
     if (!htf || base.action === 'WAIT') return base;
     // trading with the higher timeframe is safer than trading against it
@@ -238,7 +263,7 @@ export default function App() {
     };
     if (conf < 50) { out.action = 'WAIT'; out.sl = out.tp1 = out.tp2 = null; out.option = null; out.warnings = ['Setup is too weak once the higher timeframe is taken into account.', ...out.warnings]; }
     return out;
-  }, [analysis, bt, strat, tf, inst, htf]);
+  }, [analysis, bt, strat, tf, inst, htf, htfDone]);
 
   // average candle range over the last 50 candles: the basis for suggesting a stop loss and target
   const atr = useMemo(() => {
@@ -280,18 +305,18 @@ export default function App() {
     const out: { price: number; color: string; title: string; dashed?: boolean }[] = [];
     paper.acc.positions.filter((p) => p.inst.id === inst.id).forEach((p) => {
       const pl = netPnl(p, prices[inst.id] ?? p.entry, paper.fxNow(p));
-      out.push({ price: p.entry, color: '#2962ff', title: `${p.side === 'long' ? 'LONG' : 'SHORT'} ${cur.signed(pl)}` });
-      if (p.sl !== undefined) out.push({ price: p.sl, color: '#ef5350', title: 'SL', dashed: true });
-      if (p.tp !== undefined) out.push({ price: p.tp, color: '#26a69a', title: 'TP', dashed: true });
+      out.push({ price: p.entry, color: '#7c6cff', title: `${p.side === 'long' ? 'LONG' : 'SHORT'} ${cur.signed(pl)}` });
+      if (p.sl !== undefined) out.push({ price: p.sl, color: '#ff5d7a', title: 'SL', dashed: true });
+      if (p.tp !== undefined) out.push({ price: p.tp, color: '#2ee6a6', title: 'TP', dashed: true });
     });
     Object.values(preview).forEach((ls) => ls.forEach((l) => out.push(l)));
     (paper.acc.orders ?? []).filter((o) => o.inst.id === inst.id).forEach((o) => {
-      out.push({ price: o.trigger, color: '#f5a623', title: `${o.kind.toUpperCase()} ${o.side === 'long' ? 'BUY' : 'SELL'}`, dashed: true });
+      out.push({ price: o.trigger, color: '#ffb84d', title: `${o.kind.toUpperCase()} ${o.side === 'long' ? 'BUY' : 'SELL'}`, dashed: true });
     });
     if (rtab === 'advisor' && showAdvice && advice && advice.action !== 'WAIT' && advice.sl !== null && advice.tp1 !== null && advice.tp2 !== null) {
-      out.push({ price: advice.sl, color: '#ef5350', title: 'AI SL', dashed: true });
-      out.push({ price: advice.tp1, color: '#26a69a', title: 'AI TP1', dashed: true });
-      out.push({ price: advice.tp2, color: '#26a69a', title: 'AI TP2', dashed: true });
+      out.push({ price: advice.sl, color: '#ff5d7a', title: 'AI SL', dashed: true });
+      out.push({ price: advice.tp1, color: '#2ee6a6', title: 'AI TP1', dashed: true });
+      out.push({ price: advice.tp2, color: '#2ee6a6', title: 'AI TP2', dashed: true });
     }
     return out;
   }, [paper.acc.positions, paper.acc.orders, prices, inst.id, showAdvice, advice, cur, rtab, preview]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -350,13 +375,13 @@ export default function App() {
       <p><code>RELIANCE</code> <code>TCS</code> <code>nifty</code> · in US / All: <code>AAPL</code> <code>gold</code> <code>EURUSD=X</code> <code>BTCUSDT</code></p></> },
     { target: '[data-tour="markets"]', placement: 'bottom', title: 'Browse, scan and watch', body: <>
       <p><b>Markets</b> lists live prices by category, shows US and India (NSE) option chains, keeps your watchlist, and has a <b>Scanner</b> that ranks a whole market by chart patterns.</p></> },
-    { target: '.seg', placement: 'bottom', title: 'Choose a timeframe', body: <>
+    { target: '[data-tour="tf"]', placement: 'bottom', title: 'Choose a timeframe', body: <>
       <p>Each candle covers this much time. <b>1h</b> or <b>1D</b> is a good place to start.</p>
       <p>Patterns, signals and the AI advisor are all recalculated for the timeframe you pick.</p></> },
-    { target: '.menu', placement: 'right', title: 'Pattern menu', before: () => setTab('chart'), body: <>
+    { target: '.menu', placement: 'right', title: 'Pattern menu', before: () => { setTab('chart'); setShowMenu(true); }, body: <>
       <p>Every chart and candlestick pattern, scored by how closely it matches <i>right now</i>. The best match is tagged <b>CLOSEST</b>. Click one to draw it on the chart.</p>
       <p className="tour-hint">The percentage is how similar the shape is. It is not the chance of winning.</p></> },
-    { target: '.banner', placement: 'bottom', title: 'The chart at a glance', body: <>
+    { target: '.hud', placement: 'bottom', title: 'The chart at a glance', body: <>
       <p>This line names the pattern that is forming and the overall bias. Green and red arrows on the candles are buy and sell candlestick signals.</p>
       <p><b>Mouse wheel</b> zooms, <b>drag</b> pans, and the buttons below reset the view.</p></> },
     { target: '.drawbar', placement: 'right', title: 'Drawing tools', body: <>
@@ -382,6 +407,8 @@ export default function App() {
       <p>You can replay this tour any time with <b>? Tour</b> in the top bar.</p></> },
   ], []);
 
+  useEffect(() => { if (tourOpen) setShowSide(true); }, [tourOpen, setShowSide]);
+
   const closeTour = useCallback(() => {
     setTourOpen(false);
     setRtab('advisor');
@@ -396,49 +423,61 @@ export default function App() {
   }, [loading, analysis]);
 
   const top = analysis?.charts[0], cd = analysis?.candles[0];
-  const status = top ? (top.score >= 55 ? 'Forming' : top.score >= 35 ? 'Early sign of' : 'No clear chart pattern. Closest:') : '';
+  const status = top ? (top.score >= 55 ? 'Forming' : top.score >= 35 ? 'Early sign' : 'Closest') : '';
 
   return (
     <>
       <header className="topbar">
         <a className="logo" href="#/" title="Home" style={{ textDecoration: 'none', color: 'inherit' }}>Trade<b>Master</b></a>
         <Nav page="charts" />
+        <span className="grow" />
         <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={MARKETS.find((m) => m.id === market)?.hint} aria-label="Market" data-tour="market">
           {MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
         <SymbolSearch current={inst} onPick={setInst} market={market} onMarket={setMarket} />
-        <button className="theme" title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>
-        <button className="theme" data-tour="markets" title="Browse stocks, forex, commodities, futures, options" onClick={() => setShowMarkets(true)}>▦ Markets</button>
-        <div className="seg">
-          {TFS.map(([l]) => <button key={l} className={l === tf ? 'on' : ''} onClick={() => setTf(l)}>{l}</button>)}
-        </div>
+        <select className="ccysel" value={display} onChange={(e) => setDisplay(e.target.value)} title={fx.live ? `Live exchange rates, updated ${new Date(fx.updated).toLocaleTimeString()}` : 'Approximate offline exchange rates'}>
+          {CURRENCIES.map((c) => <option key={c.code} value={c.code} title={c.name}>{c.code}</option>)}
+        </select>
+        <button className="theme" title="Take the guided tour" onClick={() => setTourOpen(true)}>?</button>
+        <button className="theme" title="Toggle light / dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '🌙'}</button>
+        <AccountMenu />
+      </header>
+
+      <div className="toolbar">
+        <LiveBar name={inst.name} kind={inst.kind} tfLabel={tf} symbol={symbol.replace(/.(NS|BO)$/, '')} leading={<button className={`star theme ${watch.has(inst.id) ? 'on' : ''}`} style={{ padding: '0 6px', border: 0, background: 'none', fontSize: 15 }} title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>} status={feed} demo={demo} px={price?.px ?? null} ch={price?.ch ?? null} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
+        <span className="sp" />
+        <Timeframe tf={tf} setTf={setTf} />
         <select value={type} aria-label="Chart type" onChange={(e) => setType(e.target.value as typeof type)}>
           <option value="candles">Candles</option><option value="line">Line</option><option value="area">Area</option>
         </select>
         <IndicatorsMenu tg={tg} setTg={setTg} />
-        <select className="ccysel" value={display} onChange={(e) => setDisplay(e.target.value)} title={fx.live ? `Live exchange rates, updated ${new Date(fx.updated).toLocaleTimeString()}` : 'Approximate offline exchange rates'}>
-          {CURRENCIES.map((c) => <option key={c.code} value={c.code} title={c.name}>{c.code}</option>)}
-        </select>
-        <button className="theme" title="Take the guided tour" onClick={() => setTourOpen(true)}>? Tour</button>
-        <button className="theme" title="Toggle light / dark mode" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '🌙'}</button>
-        <LiveBar status={feed} demo={demo} px={price?.px ?? null} ch={price?.ch ?? null} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
-        <AccountMenu />
-      </header>
+        <button className="theme" title="Show every chart and candlestick pattern" onClick={() => setShowMenu(!showMenu)} style={showMenu ? { background: 'var(--sel)', borderColor: 'rgba(124,108,255,.6)' } : undefined}>◧ Patterns</button>
+        <button className="theme" title="Show or hide the side panel (AI, trade, alerts)" onClick={() => setShowSide(!showSide)} style={showSide ? { background: 'var(--sel)', borderColor: 'rgba(124,108,255,.6)' } : undefined}>▤ Panel</button>
+        <button className="theme" data-tour="markets" title="Browse stocks, forex, commodities, futures, options" onClick={() => setShowMarkets(true)}>▦ Markets</button>
+      </div>
 
       <Tour open={tourOpen} steps={tourSteps} onClose={closeTour} />
       {showMarkets && <Markets onPick={(i, t) => { setInst(i); if (t) setTf(t); }} onClose={() => setShowMarkets(false)} watch={watch} paper={paper} market={market} setMarket={setMarket} />}
 
-      <div className="layout">
-        {analysis
+      <div className={`layout ${showMenu ? '' : 'nomenu'} ${showSide ? '' : 'noside'}`} style={{ '--lw': `${lw}px`, '--rw': `${rw}px` } as React.CSSProperties}>
+        {showMenu && <div className="grip l" onPointerDown={drag('l')} onDoubleClick={() => resetW('l')} title="Drag to resize · double-click to reset" />}
+        {showSide && <div className="grip r" onPointerDown={drag('r')} onDoubleClick={() => resetW('r')} title="Drag to resize · double-click to reset" />}
+        {!showMenu ? null : analysis
           ? <Menu analysis={analysis} tab={tab} setTab={setTab} bias={bias} setBias={setBias} sort={sort} setSort={setSort} q={q} setQ={setQ} sel={sel} onSelect={select} />
           : <aside className="menu"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
         <main className="chartwrap">
           <div className="chartarea">
-          <div className="banner">
-            {loading ? 'Loading…' : !analysis || !top || !cd ? 'Not enough price history on this timeframe for pattern analysis. Try a smaller timeframe (5m / 15m) or a more liquid instrument.' : (<>
-              {status} <b>{top.name}</b> ({top.score}%) <span className={cls(top.eff)}>{word(top.eff)}</span> · Overall{' '}
-              <b className={cls(analysis.bias / 100)}>{analysis.label} {analysis.bias > 0 ? '+' : ''}{analysis.bias}</b> · {symbol} {tf}
-              {cd.score >= 50 && <> · Candle: <b>{cd.name}</b> <span className={cls(cd.eff)}>{word(cd.eff)}</span></>}
+          <div className="hud">
+            {loading ? <span className="hud-k">Loading…</span> : !analysis || !top || !cd ? <span className="small">Not enough history on this timeframe. Try 5m / 15m or a more liquid symbol.</span> : (<>
+              <button className="hud-pat" onClick={() => setShowMenu(!showMenu)} title="Open the pattern list">
+                <span className="hud-k">{status}</span><b>{top.name}</b><span className="hud-score">{top.score}%</span><span className={`tone ${cls(top.eff)}`}>{word(top.eff)}</span>
+              </button>
+              <div title="Overall reading of all signals, from bearish (−100) to bullish (+100)">
+                <span className="hud-k">Bias</span>
+                <span className="bias"><i style={{ left: `${(Math.max(-100, Math.min(100, analysis.bias)) + 100) / 2}%` }} /></span>
+                <b className={cls(analysis.bias / 100)}>{analysis.label}</b>
+              </div>
+              {cd.score >= 50 && <div><span className="hud-k">Candle</span><b>{cd.name}</b><span className={`tone ${cls(cd.eff)}`}>{word(cd.eff)}</span></div>}
             </>)}
           </div>
           <ChartView ref={chartApi} theme={theme} lines={lines} type={type} ema20={tg.e20} ema50={tg.e50} vol={tg.vol} signalsOn={tg.sig} bb={tg.bb} vwap={tg.vwap} showLevels={tg.sr} levels={levels} symbolKey={inst.id} selected={selected} signals={signals} />
@@ -451,7 +490,7 @@ export default function App() {
             </div>
           )}
         </main>
-        <div className="rside">
+        <div className="rside" style={showSide ? undefined : { display: 'none' }}>
           <div className="rtabs">
             <button className={rtab === 'analysis' ? 'on' : ''} onClick={() => setRtab('analysis')}>Analysis</button>
             <button className={rtab === 'advisor' ? 'on' : ''} onClick={() => setRtab('advisor')}>AI{advice && advice.action !== 'WAIT' ? ` · ${advice.action}` : ''}</button>

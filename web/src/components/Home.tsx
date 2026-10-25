@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Nav from './Nav';
 import SymbolSearch from './SymbolSearch';
-import AltTable from './AltTable';
+import { shortName } from '../portfolio';
 import AccountMenu, { SaveHint } from './AccountMenu';
 import { WhyCard } from './WhyCard';
 import { useTheme } from '../theme';
@@ -9,7 +9,7 @@ import { useWatchlist } from '../watchlist';
 import { usePortfolios } from '../portfolio';
 import { MARKETS, inMarket, loadMarket, saveMarket, type MarketId } from '../markets';
 import { HOME_INDICES, SECTORS, moversUniverse, useBoard, useMarketNews, useSparks } from '../home';
-import { bestAlternatives, scanLargeCaps, useAlternatives, type Scan } from '../portfolioAlternatives';
+import { bestAlternatives, scanLargeCaps, useAlternatives, type Alt, type Scan } from '../portfolioAlternatives';
 import { ago } from '../news';
 import type { Board } from '../data';
 import type { Instrument } from '../types';
@@ -29,11 +29,19 @@ function openChart(inst: Instrument) {
   location.hash = '#/charts';
 }
 
-function Spark({ data, up }: { data?: number[]; up: boolean }) {
+function Spark({ data, up, id }: { data?: number[]; up: boolean; id: string }) {
   if (!data || data.length < 5) return <svg className="hm-spark" />;
-  const lo = Math.min(...data), hi = Math.max(...data), w = 120, h = 34;
-  const pts = data.map((v, i) => `${((i / (data.length - 1)) * w).toFixed(1)},${(h - 3 - ((v - lo) / (hi - lo || 1)) * (h - 6)).toFixed(1)}`).join(' ');
-  return <svg className="hm-spark" viewBox={`0 0 ${w} ${h}`} aria-hidden><polyline points={pts} fill="none" stroke={up ? 'var(--up)' : 'var(--down)'} strokeWidth="1.6" /></svg>;
+  const lo = Math.min(...data), hi = Math.max(...data), w = 120, h = 46;
+  const xy = data.map((v, i) => [(i / (data.length - 1)) * w, h - 4 - ((v - lo) / (hi - lo || 1)) * (h - 12)] as const);
+  const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const col = up ? 'var(--up)' : 'var(--down)';
+  return (
+    <svg className="hm-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
+      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={col} stopOpacity=".38" /><stop offset="1" stopColor={col} stopOpacity="0" /></linearGradient></defs>
+      <polygon points={`0,${h} ${line} ${w},${h}`} fill={`url(#${id})`} />
+      <polyline points={line} fill="none" stroke={col} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 type MoverTab = 'gainers' | 'losers' | 'high' | 'low' | 'active';
@@ -59,7 +67,7 @@ function Movers({ board, watch }: { board: Record<string, Board>; watch: ReturnT
 
   return (
     <section className="pf-box">
-      <h3>Stocks moving today</h3>
+      <h3>Movers today</h3>
       <div className="chips pf-chips">{tabs.map(([t, l]) => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{l}</button>)}</div>
       {!all.length ? <p className="small">Loading prices…</p> : (
         <div className="pf-scroll"><table className="pf-table hm-table"><thead><tr><th></th><th>Name</th><th className="r">Price</th><th className="r">Today</th><th className="r">{tab === 'high' ? 'From 52-wk high' : tab === 'low' ? 'From 52-wk low' : '1 year'}</th></tr></thead>
@@ -78,7 +86,6 @@ function Movers({ board, watch }: { board: Record<string, Board>; watch: ReturnT
           })}</tbody></table></div>
       )}
       {all.length > 8 && <button className="mini" onClick={() => setMore(!more)}>{more ? 'Show fewer' : 'Show more'}</button>}
-      <p className="small">Click a row to open its chart. Out of {all.length} widely followed names. Prices refresh every 20 seconds while the market is open.</p>
     </section>
   );
 }
@@ -111,20 +118,58 @@ function WinnerRow({ i, w, bench, open, toggle, watch, own }: { i: number; w: Sc
   </>);
 }
 
+type IdeaSort = 'score' | 'r1y' | 'r3yAnn' | 'maxDD';
+const IDEA_SORTS: [IdeaSort, string][] = [['score', 'Best overall'], ['r1y', '1-year return'], ['r3yAnn', '3-year / yr'], ['maxDD', 'Smallest fall']];
+
+function IdeaCards({ list, watch, chips = true }: { list: Alt[]; watch: ReturnType<typeof useWatchlist>; chips?: boolean }) {
+  const [by, setBy] = useState<IdeaSort>('score');
+  const sorted = useMemo(() => [...list].sort((x, y) => by === 'maxDD' ? Math.abs(x.maxDD ?? 999) - Math.abs(y.maxDD ?? 999) : (y[by] ?? -999) - (x[by] ?? -999)), [list, by]);
+  const best = Math.max(...sorted.map((x) => Math.abs(x.r1y ?? 0)), 1);
+  return (<>
+    {chips && <div className="chips pf-chips">{IDEA_SORTS.map(([k, l]) => <button key={k} className={by === k ? 'on' : ''} onClick={() => setBy(k)}>{l}</button>)}</div>}
+    <div className="idea-grid">
+      {sorted.map((a, i) => (
+        <div key={a.inst.id} className="idea">
+          <div className="idea-top">
+            <span className="idea-rank">{i + 1}</span>
+            <div className="idea-nm"><b>{shortName(a.inst)}</b><span className="small">{a.inst.source === 'mf' ? a.kind : `${a.inst.id.replace(/.(NS|BO)$/, '')} · ${a.kind}`}</span></div>
+            <div className={`idea-ret ${tone(a.r1y)}`}><b>{pc(a.r1y, 1)}</b><span className="small">1 year</span></div>
+          </div>
+          <div className="idea-bar"><i className={tone(a.r1y)} style={{ width: `${Math.min(100, (Math.abs(a.r1y ?? 0) / best) * 100)}%` }} /></div>
+          <div className="idea-stats">
+            <div><span>3 yrs / yr</span><b className={tone(a.r3yAnn)}>{pc(a.r3yAnn, 1)}</b></div>
+            <div><span>Vs index</span><b className={tone(a.alpha1)}>{a.alpha1 === null ? '–' : `${a.alpha1 >= 0 ? '+' : '−'}${Math.abs(a.alpha1).toFixed(1)}`}</b></div>
+            <div><span>Worst fall</span><b className="down">{a.maxDD === null ? '–' : `−${Math.abs(a.maxDD).toFixed(0)}%`}</b></div>
+            <div><span>Trend</span><b>{a.debt ? 'Low risk' : a.stat.trend}</b></div>
+          </div>
+          {a.inst.source !== 'mf' && (
+            <div className="idea-act">
+              <button className="mini" onClick={() => openChart(a.inst)}>Chart</button>
+              <button className="mini" onClick={() => watch.toggle(a.inst)}>{watch.has(a.inst.id) ? '★ Watching' : '☆ Watch'}</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  </>);
+}
+
 function Ideas({ ccy, watch, held }: { ccy: string; watch: ReturnType<typeof useWatchlist>; held: Set<string> }) {
   const [on, setOn] = useState(false);
   const { alts, prog } = useAlternatives(ccy, watch.list, held, null, on);
   return (
     <section className="pf-box">
-      <h3>Ideas worth researching</h3>
-      <p className="small">Popular stocks, ETFs{ccy === 'INR' ? ' and mutual funds' : ''} that beat the index over 1 and 3 years, are not in a down-trend, and do not look stretched. Your own holdings are left out.</p>
-      {!on ? <button className="mini on" onClick={() => setOn(true)}>Find ideas (checks about 35 options, takes a few seconds)</button>
-        : !alts ? <p className="small">Checking {prog[1] > 1 ? prog[1] : 'about 35'} options… {prog[0]}/{prog[1] > 1 ? prog[1] : '…'}</p> : (<>
-          <h4 className="pf-subh">Stocks, ETFs and equity funds</h4>
-          <AltTable list={bestAlternatives(alts, false, 6)} base={null} watch={watch} onChart={openChart} />
-          {alts.some((a) => a.debt) && <><h4 className="pf-subh">Lower-risk bond funds</h4><AltTable list={bestAlternatives(alts, true, 3)} base={null} watch={watch} onChart={openChart} /></>}
-          <p className="small">Past winners often stop winning. This is a shortlist to research, not advice.</p>
-        </>)}
+      <h3>Ideas to research</h3>
+      {!on ? (<>
+        <p className="small">Names that beat the index over 1 and 3 years without looking stretched.</p>
+        <button className="mini on" onClick={() => setOn(true)}>✨ Find ideas</button>
+      </>) : !alts ? (
+        <div className="idea-load"><i style={{ width: `${prog[1] > 1 ? (prog[0] / prog[1]) * 100 : 8}%` }} /><span className="small">Checking {prog[1] > 1 ? prog[1] : 'about 35'} options… {prog[0]}/{prog[1] > 1 ? prog[1] : '…'}</span></div>
+      ) : (<>
+        <IdeaCards list={bestAlternatives(alts, false, 6)} watch={watch} />
+        {alts.some((a) => a.debt) && <><h4 className="pf-subh">Lower-risk bond funds</h4><IdeaCards chips={false} list={bestAlternatives(alts, true, 3)} watch={watch} /></>}
+        <p className="small">Past winners often stop winning. A shortlist to research, not advice.</p>
+      </>)}
     </section>
   );
 }
@@ -172,6 +217,13 @@ export default function Home() {
   const funds = holdings.filter((h) => h.inst.source === 'mf').length;
 
   const live = board[tiles[0]?.id]?.live;
+  const mood = useMemo(() => {
+    const idx = tiles.filter((t) => t.id !== '^INDIAVIX').map((t) => board[t.id]).filter(Boolean);
+    if (!idx.length) return { head: <>Reading the <em>market</em>…</>, sub: 'Fetching live prices' };
+    const upN = idx.filter((b) => b.chg > 0).length, avg = idx.reduce((a, b) => a + b.chg, 0) / idx.length, first = idx[0];
+    const word = avg > 0.6 ? 'rallying' : avg > 0.1 ? 'climbing' : avg > -0.1 ? 'flat' : avg > -0.6 ? 'cautious' : 'selling off';
+    return { head: <>Markets are <em>{word}</em></>, sub: `${tiles[0].name} ${level(first.price)} (${pc(first.chg)}) · ${upN} of ${idx.length} indices higher` };
+  }, [board, tiles]);
   const mkt = MARKETS.find((m) => m.id === market);
 
   return (
@@ -179,16 +231,38 @@ export default function Home() {
       <header className="topbar">
         <a className="logo" href="#/" style={{ textDecoration: 'none', color: 'inherit' }}>Trade<b>Master</b></a>
         <Nav page="home" />
-        <select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={mkt?.hint} aria-label="Market">
+        <span className="grow" /><select className="mktsel" value={market} onChange={(e) => setMarket(e.target.value as MarketId)} title={mkt?.hint} aria-label="Market">
           {MARKETS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
-        <SymbolSearch current={{ id: '', name: '', source: 'yahoo' }} market={market} onMarket={setMarket} onPick={(i) => { if (!inMarket(i, market)) saveMarket('ALL'); openChart(i); }} />
         <button className="theme" title="Toggle light / dark mode" onClick={flip}>{theme === 'dark' ? '☀' : '🌙'}</button>
-        <span className="small pf-upd">{updated ? `${live ? '● Live' : 'Market closed'} · updated ${new Date(updated).toLocaleTimeString()}` : 'Loading…'}</span>
         <AccountMenu />
       </header>
 
       <main className="pf">
+        <section className="hero">
+          <div className="hero-main">
+            <span className="eyebrow"><i className={`dot ${live ? 'live' : ''}`} />{live ? 'Live' : 'Market closed'} · {mkt?.label}{updated ? ` · ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            <h1>{mood.head}</h1>
+            <p className="hero-sub">{mood.sub}</p>
+            <SymbolSearch current={{ id: '', name: '', source: 'yahoo' }} market={market} onMarket={setMarket} onPick={(i) => { if (!inMarket(i, market)) saveMarket('ALL'); openChart(i); }} />
+          </div>
+          <div className="hero-side">
+            {own ? (<>
+              <div><span className="eyebrow">Your stocks today</span>
+                <div className={`big-n ${tone(own.day)}`} style={{ marginTop: 8 }}>{own.day >= 0 ? '+' : '−'}{money(mine[0] ?? 'X.NS', Math.abs(own.day))}</div>
+                <div className={tone(own.day)} style={{ fontWeight: 700 }}>{pc((own.day / (own.value - own.day)) * 100)}</div></div>
+              <div className="small">Worth <b style={{ color: 'var(--text)' }}>{money(mine[0] ?? 'X.NS', own.value)}</b> · {own.n} stock{own.n > 1 ? 's' : ''}{funds ? ` + ${funds} fund${funds > 1 ? 's' : ''}` : ''}</div>
+              <a className="cta" href="#/portfolio">Open portfolio →</a>
+            </>) : (<>
+              <div><span className="eyebrow">Your portfolio</span>
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', margin: '10px 0 6px' }}>See what to hold, buy or sell</div>
+                <div className="small">Add stocks by hand or from a screenshot.</div></div>
+              <a className="cta" href="#/portfolio">{holdings.length ? 'Open portfolio →' : 'Add my stocks →'}</a>
+              <SaveHint />
+            </>)}
+          </div>
+        </section>
+
         <section className="hm-tiles">
           {tiles.map((t) => {
             const b = board[t.id];
@@ -197,35 +271,18 @@ export default function Home() {
                 <div className="small">{t.name}</div>
                 <b className="hm-lvl">{b ? level(b.price) : '…'}</b>
                 <span className={tone(b?.chg)}>{b ? pc(b.chg) : ''}</span>
-                <Spark data={sparks[t.id]} up={(b?.chg ?? 0) >= 0} />
+                <Spark id={`sg-${t.id.replace(/\W/g, "")}`} data={sparks[t.id]} up={(b?.chg ?? 0) >= 0} />
               </div>
             );
           })}
         </section>
 
         {cues.length > 0 && (
-          <div className="hm-cues small">Global cues:
+          <div className="hm-cues small"><span className="hud-k" style={{ marginRight: 8 }}>Global</span>
             {cues.map((c) => board[c] && <span key={c} className="chip" style={{ marginLeft: 6 }}>{short(board[c].name).replace(/ Index$/, '').slice(0, 18)} <b className={tone(board[c].chg)}>{pc(board[c].chg)}</b></span>)}
-            <a href="#/world" style={{ marginLeft: 10 }}>All world markets →</a>
+            <a href="#/world" style={{ marginLeft: 10 }}>World map →</a>
           </div>
         )}
-
-        <section className="pf-box hm-mine">
-          {own ? (
-            <>
-              <div><span className="small">Your stocks today</span><div className="hm-big"><b className={tone(own.day)}>{own.day >= 0 ? '+' : '−'}{money(mine[0] ?? 'X.NS', Math.abs(own.day))}</b> <span className={tone(own.day)}>{pc((own.day / (own.value - own.day)) * 100)}</span></div></div>
-              <div><span className="small">Value / invested</span><div className="hm-big">{money(mine[0] ?? 'X.NS', own.value)} <span className="small">/ {money(mine[0] ?? 'X.NS', own.cost)}</span></div></div>
-              <div className="small">{own.n} stock{own.n > 1 ? 's' : ''}{funds ? ` and ${funds} fund${funds > 1 ? 's' : ''} (funds are counted in the full analysis)` : ''}</div>
-              <a className="mini on" href="#/portfolio" style={{ textDecoration: 'none' }}>Analyse my portfolio →</a>
-            </>
-          ) : (
-            <>
-              <div><b>Track and analyse your own stocks and mutual funds</b><div className="small">Add them by hand or from a screenshot of your broker app. You get buy / hold / sell guidance for each, news and a report card.</div></div>
-              <a className="mini on" href="#/portfolio" style={{ textDecoration: 'none' }}>{holdings.length ? 'Open my portfolio →' : 'Add my stocks →'}</a>
-              <SaveHint />
-            </>
-          )}
-        </section>
 
         <div className="hm-two">
           <Movers board={Object.fromEntries(universe.filter((u) => board[u]).map((u) => [u, board[u]]))} watch={watch} />
@@ -256,15 +313,15 @@ export default function Home() {
 
         {showWinners && (
           <section className="pf-box">
-            <h3>Top performers this year, and why</h3>
-            <p className="small">The best of {scan ? scan.total : 'about 65'} widely held {market === 'US' ? 'US' : 'Indian'} companies over the last 12 months. Press <b>Why?</b> to see what drove each.</p>
+            <h3>Top performers this year</h3>
+            <p className="small">Best of {scan ? scan.total : '~65'} large companies, last 12 months. Tap <b>Why?</b> for the drivers.</p>
             <Winners scan={scan} watch={watch} held={held} />
           </section>
         )}
 
         {showWinners && <Ideas ccy={ccy} watch={watch} held={held} />}
 
-        <p className="disc">Prices come from Yahoo Finance and can be delayed. Nothing here is investment advice. It is a rule-based reading of price history, and it cannot see everything that moves a market.</p>
+        <p className="disc">Prices from Yahoo Finance, may be delayed. Not investment advice.</p>
       </main>
     </>
   );

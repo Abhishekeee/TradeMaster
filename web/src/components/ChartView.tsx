@@ -21,11 +21,11 @@ interface Props {
 }
 
 const THEMES = {
-  dark: { bg: '#131722', text: '#b2b5be', grid: '#1c202b', border: '#2a2e39' },
-  light: { bg: '#ffffff', text: '#434651', grid: '#eef0f5', border: '#dfe3ee' },
+  dark: { bg: 'rgba(0,0,0,0)', text: '#9096b8', grid: 'rgba(255,255,255,0.045)', border: 'rgba(255,255,255,0.09)' },
+  light: { bg: 'rgba(0,0,0,0)', text: '#5a6082', grid: 'rgba(30,34,80,0.07)', border: 'rgba(30,34,80,0.12)' },
 };
 
-const COL = { up: '#26a69a', down: '#ef5350', neu: '#f5a623' } as const;
+const COL = { up: '#2ee6a6', down: '#ff5d7a', neu: '#ffb84d' } as const;
 const MAX_MARKERS = 40;
 const FIB: [number, string][] = [[0, '#787b86'], [0.236, '#f5a623'], [0.382, '#26a69a'], [0.5, '#2962ff'], [0.618, '#26a69a'], [0.786, '#f5a623'], [1, '#787b86']];
 const DRAW_COLOR = '#2962ff';
@@ -72,7 +72,7 @@ const ChartView = forwardRef<ChartApi, Props>(function ChartView(p, ref) {
     const c = data.current;
     if (!main.current || !c.length) return;
     main.current.setData(c.map((k) => val(k)) as never);
-    vol.current!.setData(c.map((k) => ({ time: k.time as Time, value: k.volume, color: k.close >= k.open ? '#26a69a55' : '#ef535055' })));
+    vol.current!.setData(c.map((k) => ({ time: k.time as Time, value: k.volume, color: k.close >= k.open ? '#2ee6a644' : '#ff5d7a44' })));
     const closes = c.map((k) => k.close);
     e20.current!.setData(ema(closes, 20).map((v: number, i: number) => ({ time: c[i].time as Time, value: v })));
     e50.current!.setData(ema(closes, 50).map((v: number, i: number) => ({ time: c[i].time as Time, value: v })));
@@ -100,7 +100,7 @@ const ChartView = forwardRef<ChartApi, Props>(function ChartView(p, ref) {
       const arr = data.current;
       if (arr.length && arr[arr.length - 1].time === c.time) arr[arr.length - 1] = c; else arr.push(c);
       main.current?.update(val(c) as never);
-      vol.current?.update({ time: c.time as Time, value: c.volume, color: c.close >= c.open ? '#26a69a55' : '#ef535055' });
+      vol.current?.update({ time: c.time as Time, value: c.volume, color: c.close >= c.open ? '#2ee6a644' : '#ff5d7a44' });
       if (arr.length > 50) {
         const closes = arr.map((k) => k.close);
         e20.current?.update({ time: c.time as Time, value: ema(closes, 20)[arr.length - 1] });
