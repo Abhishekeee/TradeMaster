@@ -6,7 +6,7 @@ import PortfolioImport from './PortfolioImport';
 import { CURRENCIES, makeCurrency, useFx } from '../fx';
 import { currencyOf, fetchCandles, fetchLivePrices, fundInst, searchFunds, type FundHit } from '../data';
 import { analyse, benchmarkFor, shortName, summarise, usePortfolioData, usePortfolios, type NewLot, type Stat, type Verdict } from '../portfolio';
-import { ActionPlan, Grades, Signature } from './PortfolioInsights';
+import { Grades, Signature } from './PortfolioInsights';
 import { MARKETS, loadMarket, saveMarket, type MarketId } from '../markets';
 import { SIGNAL_LABEL, SIGNAL_TONE, computeInsights, decide, type Ai, type Call } from '../portfolioInsights';
 import PortfolioNews from './PortfolioNews';
@@ -34,6 +34,24 @@ function Spark({ data, up }: { data: number[]; up: boolean }) {
   const lo = Math.min(...data), hi = Math.max(...data), w = 90, h = 26;
   const pts = data.map((v, i) => `${((i / (data.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / (hi - lo || 1)) * (h - 4)).toFixed(1)}`).join(' ');
   return <svg className="pf-spark" viewBox={`0 0 ${w} ${h}`} aria-hidden><polyline points={pts} fill="none" stroke={up ? 'var(--up)' : 'var(--down)'} strokeWidth="1.5" /></svg>;
+}
+
+/** Ring chart of how the money is split; the biggest slice is named in the middle. */
+function Donut({ items }: { items: { id: string; label: string; pct: number; color: string }[] }) {
+  const r = 38, c = 2 * Math.PI * r;
+  let acc = 0;
+  const top = items[0];
+  return (
+    <div className="ov-donut">
+      <div className="ring" role="img" aria-label="Share of money in each holding">
+        <svg viewBox="0 0 90 90"><circle className="trk" cx="45" cy="45" r={r} />
+          {items.map((it) => { const len = (it.pct / 100) * c; const el = <circle key={it.id} cx="45" cy="45" r={r} stroke={it.color} strokeDasharray={`${Math.max(0, len - 1)} ${c}`} strokeDashoffset={-acc} style={{ strokeWidth: 9, strokeLinecap: 'butt' }} />; acc += len; return el; })}
+        </svg>
+        {top && <b className="ov-dc"><span>{top.pct.toFixed(0)}%</span><small>{top.label}</small></b>}
+      </div>
+      <div className="pf-legend">{items.slice(0, 8).map((it) => <span key={it.id}><i style={{ background: it.color }} />{it.label} {it.pct.toFixed(0)}%</span>)}</div>
+    </div>
+  );
 }
 
 // example holdings: the buy price is set relative to today's price (f) so the example always looks realistic
@@ -186,60 +204,80 @@ export default function Portfolio() {
                         {tab === 'why' && <PortfolioWhy stats={rows} candles={candles} selected={whyFor || rows[0]?.h.id || ''} setSelected={setWhyFor} />}
             {tab === 'news' && <PortfolioNews stats={rows} selected={newsFor} setSelected={setNewsFor} />}
             {tab === 'overview' && <>
-            <section className="pf-cards">
-              <div className="pf-card"><span>Invested</span><b>{money.money(sum.invested)}</b></div>
-              <div className="pf-card"><span>Current value</span><b>{money.money(sum.value)}</b></div>
-              <div className="pf-card"><span>Total profit / loss</span><b className={tone(sum.pnl)}>{signed(sum.pnl)}</b><em className={tone(sum.pnl)}>{sgn(sum.pnlPct)}</em></div>
-              <div className="pf-card"><span>Last session</span><b className={tone(sum.day)}>{signed(sum.day)}</b><em className={tone(sum.day)}>{sgn(sum.dayPct, 2)}</em></div>
-              <div className="pf-card"><span>Vs {sum.benchName}</span><b className={tone(sum.alpha)}>{sum.alpha === null ? '–' : `${sum.alpha >= 0 ? '+' : '−'}${Math.abs(sum.alpha).toFixed(1)} pts`}</b><em>{sum.alpha === null ? 'needs price history' : sum.alpha >= 0 ? 'equity part is ahead' : 'equity part is behind'}</em></div>
-              <div className="pf-card"><span>Portfolio health</span><b className={sum.health >= 65 ? 'up' : sum.health >= 40 ? 'neu' : 'down'}>{sum.healthLabel}</b><em>{sum.health}/100 by money in good vs poor stocks</em></div>
+            <section className="ov-hero">
+              <div className="ov-main">
+                <span className="ov-k">Your portfolio</span>
+                <b className="ov-big">{money.money(sum.value)}</b>
+                <div className="ov-chips">
+                  <span className={`ov-chip ${tone(sum.pnl)}`}>{sum.pnl >= 0 ? '▲' : '▼'} {signed(sum.pnl)} · {sgn(sum.pnlPct)}</span>
+                  <span className={`ov-chip soft ${tone(sum.day)}`}>Last session {sgn(sum.dayPct, 2)}</span>
+                </div>
+                <span className="small">Invested {money.money(sum.invested)}</span>
+              </div>
+              <div className="ov-health" style={{ ['--tint' as string]: sum.health >= 65 ? '#2ee6a6' : sum.health >= 40 ? '#ffb84d' : '#ff5d7a' }}>
+                <div className="ring">
+                  <svg viewBox="0 0 90 90"><circle className="trk" cx="45" cy="45" r="38" /><circle className="val" cx="45" cy="45" r="38" strokeDasharray={2 * Math.PI * 38} strokeDashoffset={2 * Math.PI * 38 * (1 - sum.health / 100)} /></svg>
+                  <b>{sum.health}</b>
+                </div>
+                <span className="ov-k">Health · {sum.healthLabel}</span>
+              </div>
+              <div className="ov-vs">
+                <span className="ov-k">Vs {sum.benchName}</span>
+                <b className={tone(sum.alpha)}>{sum.alpha === null ? '–' : `${sum.alpha >= 0 ? 'Ahead' : 'Behind'} ${Math.abs(sum.alpha).toFixed(1)} pts`}</b>
+              </div>
             </section>
 
-            <Grades ins={ins} sum={sum} />
-            <ActionPlan stats={rows} calls={calls} onOpen={jump} />
+            <section className="ov-split">
+              <div className="pf-box ov-donutbox">
+                <h3>Where your money is</h3>
+                <Donut items={sum.sorted.map((s, i) => ({ id: s.h.id, label: shortName(s.h.inst), pct: s.weight, color: `hsl(${(i * 47) % 360} 60% 55%)` }))} />
+              </div>
+              <div className="pf-box ov-todo">
+                <h3>What to do</h3>
+                <div className="ov-tiles">
+                  {([['up', 'Buy more'], ['neu', 'Hold'], ['down', 'Reduce / sell']] as const).map(([tn, label]) => {
+                    const items = rows.filter((s) => calls.get(s.h.id) && SIGNAL_TONE[calls.get(s.h.id)!.signal] === tn);
+                    return (
+                      <div key={tn} className={`ov-tile ${tn}`}>
+                        <b>{items.length}</b><span>{label}</span>
+                        <div className="ov-names">{items.map((s) => <button key={s.h.id} onClick={() => jump(s.h.id)}>{shortName(s.h.inst)}</button>)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
 
             <section className="pf-box">
-              <h3>What this means</h3>
-              <ul>{sum.insights.map((t, i) => <li key={i}>{t}</li>)}</ul>
-              <div className="pf-alloc" role="img" aria-label="Share of money in each holding">
-                {sum.sorted.map((s, i) => <i key={s.h.id} title={`${shortName(s.h.inst)} ${s.weight.toFixed(1)}%`} style={{ width: `${s.weight}%`, background: `hsl(${(i * 47) % 360} 55% 50%)` }} />)}
+              <h3>Your holdings</h3>
+              <div className="ov-list">
+                {rows.map((s) => {
+                  const f = conv(s.ccy);
+                  const call = calls.get(s.h.id);
+                  return (
+                    <div key={s.h.id} id={'pf-' + s.h.id} className={`ov-row ${open === s.h.id ? 'open' : ''}`}>
+                      <button className="ov-line" onClick={() => setOpen(open === s.h.id ? null : s.h.id)}>
+                        <span className="ov-name"><b>{shortName(s.h.inst)}</b><small>{s.isFund ? (s.debt ? 'Debt fund' : 'Mutual fund') : s.h.inst.name.split(' · ')[0]}</small></span>
+                        <Spark data={s.spark} up={s.spark.length < 2 || s.spark[s.spark.length - 1] >= s.spark[0]} />
+                        <span className="ov-val"><b>{money.money(s.value * f)}</b><i className="ov-w"><u style={{ width: `${Math.min(100, s.weight)}%` }} /></i></span>
+                        <span className={`ov-pl ${tone(s.pnl)}`}>{sgn(s.pnlPct)}<small>{signed(s.pnl * f)}</small></span>
+                        {call ? <span className={`badge ${SIGNAL_TONE[call.signal]}`}>{SIGNAL_LABEL[call.signal].toUpperCase()}</span> : <span />}
+                      </button>
+                      {open === s.h.id && <div className="pf-detail"><Detail s={s} call={call} ai={ai[s.h.inst.id]} pf={pf} onChart={() => openChart(s.h.inst)} onDeep={() => { setDeepFor(s.h.id); setTab('deep'); }} onWhy={() => { setWhyFor(s.h.id); setTab('why'); }} onNews={() => { setNewsFor(s.h.id); setTab('news'); }} /></div>}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="pf-legend">{sum.sorted.map((s, i) => <span key={s.h.id}><i style={{ background: `hsl(${(i * 47) % 360} 55% 50%)` }} />{shortName(s.h.inst)} {s.weight.toFixed(0)}%</span>)}</div>
             </section>
 
-            <Signature stats={stats} sum={sum} ins={ins} money={money.money} signed={signed} onOpen={jump} />
-
-            <section className="pf-box">
-              <h3>All holdings</h3>
-              <div className="pf-scroll">
-                <table className="pf-table pf-main">
-                  <thead><tr><th>Stock</th><th className="r">Qty / units</th><th className="r">Avg buy</th><th className="r">Price now</th><th className="r">Value</th><th className="r">Profit / loss</th><th className="r">Vs market</th><th>1 year</th><th>Verdict</th><th>Overall check</th><th>Suggestion</th></tr></thead>
-                  <tbody>
-                    {rows.map((s) => {
-                      const [vt, vc] = VERDICT[s.verdict];
-                      const f = conv(s.ccy);
-                      return [
-                        <tr key={s.h.id} id={'pf-' + s.h.id} className={`link ${open === s.h.id ? 'sel' : ''}`} onClick={() => setOpen(open === s.h.id ? null : s.h.id)}>
-                          <td><b>{shortName(s.h.inst)}</b><div className="small pf-nm" title={s.h.inst.name}>{s.isFund ? (s.debt ? 'Debt mutual fund' : 'Mutual fund') : s.h.inst.name.split(' · ')[0]}</div></td>
-                          <td className="r">{Number(s.qty.toFixed(3))}</td>
-                          <td className="r">{native(s.ccy, s.avg)}</td>
-                          <td className="r">{s.price === null ? '–' : native(s.ccy, s.price)}<div className={`small ${tone(s.dayPct)}`}>{sgn(s.dayPct, 2)}</div></td>
-                          <td className="r">{money.money(s.value * f)}<div className="small">{s.weight.toFixed(1)}%</div></td>
-                          <td className={`r ${tone(s.pnl)}`}>{signed(s.pnl * f)}<div className="small">{sgn(s.pnlPct)}</div></td>
-                          <td className={`r ${tone(s.alpha)}`}>{s.alpha === null ? '–' : `${s.alpha >= 0 ? '+' : '−'}${Math.abs(s.alpha).toFixed(1)}`}</td>
-                          <td><Spark data={s.spark} up={s.spark.length < 2 || s.spark[s.spark.length - 1] >= s.spark[0]} /></td>
-                          <td><span className={`badge ${vc}`}>{vt}</span></td>
-                          <td>{deep[s.h.id] && (deep[s.h.id].tech || deep[s.h.id].quality !== null) ? <><span className={`badge ${deep[s.h.id].combined.tone}`}>{deep[s.h.id].combined.label}</span><div className="small">{deep[s.h.id].quality !== null ? `quality ${deep[s.h.id].quality}` : 'chart only'}{deep[s.h.id].tech ? ` · ${deep[s.h.id].tech!.rating}` : ''}</div></> : <span className="small">–</span>}</td>
-                          <td>{calls.get(s.h.id) && <><span className={`badge ${SIGNAL_TONE[calls.get(s.h.id)!.signal]}`}>{SIGNAL_LABEL[calls.get(s.h.id)!.signal].toUpperCase()}</span><div className="small">{calls.get(s.h.id)!.conf} confidence</div></>}</td>
-                        </tr>,
-                        open === s.h.id && <tr key={s.h.id + 'd'} className="pf-detail"><td colSpan={11}><Detail s={s} call={calls.get(s.h.id)} ai={ai[s.h.inst.id]} pf={pf} onChart={() => openChart(s.h.inst)} onDeep={() => { setDeepFor(s.h.id); setTab('deep'); }} onWhy={() => { setWhyFor(s.h.id); setTab('why'); }} onNews={() => { setNewsFor(s.h.id); setTab('news'); }} /></td></tr>,
-                      ];
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="small">"Vs market" is how many percentage points the stock gained or lost compared with {sum.benchName} {stats.some((s) => s.alphaBasis === 'since you bought') ? 'since you bought it (or over the last year when no buy date is known)' : 'over the last year'}. Click a row for the reasons and your purchases.</p>
-            </section>
+            <details className="pf-more ov-more"><summary>More insights</summary>
+              <Grades ins={ins} sum={sum} />
+              <section className="pf-box">
+                <h3>What this means</h3>
+                <ul>{sum.insights.map((t, i) => <li key={i}>{t}</li>)}</ul>
+              </section>
+              <Signature stats={stats} sum={sum} ins={ins} money={money.money} signed={signed} onOpen={jump} />
+            </details>
             </>}
           </>
         )}

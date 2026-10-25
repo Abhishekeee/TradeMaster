@@ -54,9 +54,15 @@ export default function PortfolioDeep({ stats, deep, calls, ai, selected, setSel
   const t = d?.tech;
   const isEtf = s.h.inst.kind === 'ETF' || (s.h.inst.source === 'yahoo' && s.h.inst.kind !== 'EQUITY');
 
+  const top = (xs: string[]) => xs.slice(0, 2);
+  const Points = ({ good, bad }: { good: string[]; bad: string[] }) => (<>
+    {top(good).map((x, i) => <div key={'g' + i} className="pf-pt up">✓ {x}</div>)}
+    {top(bad).map((x, i) => <div key={'b' + i} className="pf-pt down">! {x}</div>)}
+  </>);
+
   return (
     <section className="pf-box">
-      <h3>Is it a good one? Technical and fundamental analysis</h3>
+      <h3>Is it a good one?</h3>
       <div className="chips pf-chips">
         {stats.map((x) => <button key={x.h.id} className={s.h.id === x.h.id ? 'on' : ''} onClick={() => setSelected(x.h.id)}>{shortName(x.h.inst)}</button>)}
       </div>
@@ -64,80 +70,84 @@ export default function PortfolioDeep({ stats, deep, calls, ai, selected, setSel
       {!d || (!t && !d.company && !d.fund) ? <p className="small">Waiting for price history…</p> : (<>
         <div className={`pf-say ${d.combined.tone}`}>
           <b>{shortName(s.h.inst)}: {d.combined.label}.</b> {d.combined.text}
-          {call && <> Action plan says <span className={`badge ${SIGNAL_TONE[call.signal]}`}>{SIGNAL_LABEL[call.signal].toUpperCase()}</span>.</>}
+          {call && <> Action plan: <span className={`badge ${SIGNAL_TONE[call.signal]}`}>{SIGNAL_LABEL[call.signal].toUpperCase()}</span></>}
         </div>
 
         <div className="pf-meters">
-          <Meter label={s.isFund ? 'Fund quality (returns, risk, consistency)' : 'Business quality (the fundamentals)'}
+          <Meter label={s.isFund ? 'Fund quality' : 'Business quality'}
             value={d.quality ?? 0} text={d.quality === null ? (d.ready ? 'Not enough data' : 'Loading…') : `${d.quality}/100`} cls={d.quality === null ? '' : d.quality >= 55 ? 'up' : d.quality >= 40 ? 'neu' : 'down'} />
-          {t && <Meter label="Chart timing (technical signals)" value={t.score} signed text={`${t.rating} (${t.score > 0 ? '+' : ''}${t.score})`} cls={RATING_CLASS(t.rating)} />}
+          {t && <Meter label="Chart timing" value={t.score} signed text={t.rating} cls={RATING_CLASS(t.rating)} />}
         </div>
 
         <div className="pf-deep-cols">
-          {/* ---------------- the chart */}
+          {/* 1. the business or fund */}
           <div className="pf-sc">
-            <h4>Technical analysis: how the chart looks</h4>
+            {d.company ? (<>
+              <h4>Business · fundamentals</h4>
+              <div className="row">
+                <span className={`badge ${GRADE_CLASS(d.company.grade)}`}>{d.company.grade.toUpperCase()}</span>
+                <span className="small">{[d.company.sector, d.company.marketCap ? capText(s.ccy, d.company.marketCap) : ''].filter(Boolean).join(' · ')}</span>
+              </div>
+              <Points good={d.company.strengths} bad={d.company.concerns} />
+              {d.company.street && (
+                <p className="small">Analysts: <b>{d.company.street.rating}</b>{d.company.street.upside !== null ? ` · target ${d.company.street.upside >= 0 ? '+' : '−'}${Math.abs(d.company.street.upside).toFixed(0)}%` : ''}</p>
+              )}
+              <details className="pf-more"><summary>See details</summary>
+                {d.company.metrics.length ? <MetricTable metrics={d.company.metrics} /> : <p className="small">No financial data was found for this company.</p>}
+                <p className="small">Figures are from the latest reports on Yahoo Finance. Compare with similar companies.</p>
+              </details>
+            </>) : d.fund ? (<>
+              <h4>Fund · fundamentals</h4>
+              <div className="row">
+                <span className={`badge ${GRADE_CLASS(d.fund.grade)}`}>{d.fund.grade.toUpperCase()}</span>
+                <span className="small">{[d.fund.category, d.fund.house].filter(Boolean).join(' · ')}</span>
+              </div>
+              <Points good={d.fund.strengths} bad={d.fund.concerns} />
+              <details className="pf-more"><summary>See details</summary>
+                {d.fund.metrics.length ? <MetricTable metrics={d.fund.metrics} /> : <p className="small">Not enough NAV history yet.</p>}
+                <p className="small">Not checked: expense ratio, fund size and manager. Look these up in your app.</p>
+              </details>
+            </>) : (<>
+              <h4>Fundamentals</h4>
+              <p className="small">{isEtf ? 'An ETF or index holds many companies, so there is no single balance sheet. Judge it by its chart and holdings.' : d.ready ? 'No financial data found.' : 'Loading financial data…'}</p>
+            </>)}
+          </div>
+
+          {/* 2. the chart */}
+          <div className="pf-sc">
+            <h4>Chart · technicals</h4>
             {t ? (<>
               <div className="row">
                 <span className={`badge ${RATING_CLASS(t.rating)}`}>{t.rating.toUpperCase()}</span>
                 <span className="small"><b className="up">{t.buy} buy</b> · <b className="neu">{t.neutral} neutral</b> · <b className="down">{t.sell} sell</b></span>
               </div>
               <div className="pf-tally"><i className="up" style={{ flex: t.buy }} /><i className="neu" style={{ flex: t.neutral }} /><i className="down" style={{ flex: t.sell }} /></div>
-              <div className="pf-scroll"><table className="pf-table pf-metrics"><tbody>
-                {t.indicators.map((i) => (
-                  <tr key={i.name}>
-                    <td><b>{i.name}</b><div className="small">{i.note}</div></td>
-                    <td className="r small">{i.value}</td>
-                    <td><span className={`badge ${VOTE_CLASS[i.vote]}`}>{i.vote.toUpperCase()}</span></td>
-                  </tr>
-                ))}
-              </tbody></table></div>
               {s.price !== null && (
                 <p className="small">
-                  {t.support !== null && <>Nearest support (a price where it has bounced before): <b>{money(t.support)}</b> ({(((t.support / s.price) - 1) * 100).toFixed(1)}%). </>}
-                  {t.resistance !== null && <>Nearest resistance (where it has stalled): <b>{money(t.resistance)}</b> (+{(((t.resistance / s.price) - 1) * 100).toFixed(1)}%). </>}
-                  {t.atrPct !== null && <>A typical day moves about {t.atrPct.toFixed(1)}%.</>}
+                  {t.support !== null && <>Support <b>{money(t.support)}</b> ({(((t.support / s.price) - 1) * 100).toFixed(1)}%)</>}
+                  {t.support !== null && t.resistance !== null && ' · '}
+                  {t.resistance !== null && <>Resistance <b>{money(t.resistance)}</b> (+{(((t.resistance / s.price) - 1) * 100).toFixed(1)}%)</>}
                 </p>
               )}
-              {a && <p className="small"><b>Chart patterns:</b> closest is <b>{a.pattern}</b> ({a.patScore}% match); the pattern AI says {a.action === 'WAIT' ? 'there is no clear setup' : `${a.action} (${a.conf}% confidence)`}.</p>}
-              <p className="small">Technical analysis reads price and volume only. It helps with timing, and says nothing about whether the business is sound.</p>
+              <details className="pf-more"><summary>See details</summary>
+                <div className="pf-scroll"><table className="pf-table pf-metrics"><tbody>
+                  {t.indicators.map((i) => (
+                    <tr key={i.name}>
+                      <td><b>{i.name}</b><div className="small">{i.note}</div></td>
+                      <td className="r small">{i.value}</td>
+                      <td><span className={`badge ${VOTE_CLASS[i.vote]}`}>{i.vote.toUpperCase()}</span></td>
+                    </tr>
+                  ))}
+                </tbody></table></div>
+                {t.atrPct !== null && <p className="small">A typical day moves about {t.atrPct.toFixed(1)}%.</p>}
+                {a && <p className="small">Closest pattern: <b>{a.pattern}</b> ({a.patScore}%). Pattern AI: {a.action === 'WAIT' ? 'no clear setup' : `${a.action} (${a.conf}%)`}.</p>}
+                <p className="small">Technicals read price and volume only. They help with timing, not business quality.</p>
+              </details>
             </>) : <p className="small">Needs at least 60 days of price history.</p>}
-          </div>
-
-          {/* ---------------- the business or fund */}
-          <div className="pf-sc">
-            {d.company ? (<>
-              <h4>Fundamental analysis: how the business looks</h4>
-              <div className="row">
-                <span className={`badge ${GRADE_CLASS(d.company.grade)}`}>{d.company.grade.toUpperCase()}</span>
-                <span className="small">{[d.company.sector, d.company.industry].filter(Boolean).join(' · ')}{d.company.marketCap ? ` · company size ${capText(s.ccy, d.company.marketCap)}` : ''}</span>
-              </div>
-              {d.company.metrics.length ? <MetricTable metrics={d.company.metrics} /> : <p className="small">No financial data was found for this company.</p>}
-              {d.company.strengths.length > 0 && <><h4 className="pf-subh up">Strengths</h4><ul className="small">{d.company.strengths.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
-              {d.company.concerns.length > 0 && <><h4 className="pf-subh down">Concerns</h4><ul className="small">{d.company.concerns.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
-              {d.company.street && (
-                <p className="small"><b>What analysts say:</b> {d.company.street.rating}{d.company.street.n ? ` (${d.company.street.n} analysts)` : ''}
-                  {d.company.street.target ? `, average target ${money(d.company.street.target)}${d.company.street.upside !== null ? ` (${d.company.street.upside >= 0 ? '+' : '−'}${Math.abs(d.company.street.upside).toFixed(0)}% from today)` : ''}` : ''}. Analysts are often optimistic, so treat it as one opinion.</p>
-              )}
-              <p className="small">Figures come from the latest reports Yahoo Finance holds. Compare P/E and margins with similar companies; banks and finance firms are judged without debt ratios.</p>
-            </>) : d.fund ? (<>
-              <h4>Fund check-up: how the fund looks</h4>
-              <div className="row">
-                <span className={`badge ${GRADE_CLASS(d.fund.grade)}`}>{d.fund.grade.toUpperCase()}</span>
-                <span className="small">{[d.fund.category, d.fund.house].filter(Boolean).join(' · ')}</span>
-              </div>
-              {d.fund.metrics.length ? <MetricTable metrics={d.fund.metrics} /> : <p className="small">Not enough NAV history yet.</p>}
-              {d.fund.strengths.length > 0 && <><h4 className="pf-subh up">Strengths</h4><ul className="small">{d.fund.strengths.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
-              {d.fund.concerns.length > 0 && <><h4 className="pf-subh down">Concerns</h4><ul className="small">{d.fund.concerns.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
-              <p className="small"><b>Not checked:</b> the expense ratio, fund size and who manages it are not available for free. Look at them in your app: a lower expense ratio keeps more of the return, and the same manager for 5+ years is a good sign.</p>
-            </>) : (<>
-              <h4>Fundamental analysis</h4>
-              <p className="small">{isEtf ? 'This is an ETF or index, which holds many companies, so there is no single balance sheet to read. Judge it by the chart, how it has performed and what it holds.' : d.ready ? 'No financial data was found for this symbol.' : 'Loading financial data…'}</p>
-            </>)}
           </div>
         </div>
       </>)}
-      <p className="small">This is an automatic, rule-based review, not advice. It cannot see news, management quality, taxes or your goals.</p>
+      <p className="small">Automatic, rule-based review. Not advice.</p>
     </section>
   );
 }
