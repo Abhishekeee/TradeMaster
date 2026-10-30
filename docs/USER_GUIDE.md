@@ -315,7 +315,7 @@ Open it with **My Portfolio** in the top bar. It reviews the stocks and mutual f
 
 **What you get (Overview tab)**
 - A report card (returns, risk, spread, momentum) and an investor style.
-- An **action plan** with Buy more / Hold / Trim / Sell / Review for each holding, a confidence level and the reason. Selling needs several warning signs together; buying needs a strong, not-stretched chart. Stocks also get a second opinion from the chart-pattern AI.
+- An **action plan** with Buy more / Hold / Book profit / Sell / Review for each holding, a confidence level and the reason. Selling needs several warning signs together; buying needs a strong, not-stretched chart. Stocks also get a second opinion from the chart-pattern AI.
 - Signature stats: your result against simply buying the index on the same dates, an estimate of what a 5/10/20% market fall would cost, your biggest fall in the last year, how spread out you really are, and who is carrying or dragging the portfolio.
 - Bond funds are judged on their own return, not against the stock market.
 

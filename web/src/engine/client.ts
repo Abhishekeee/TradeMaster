@@ -20,7 +20,7 @@ export function runAnalysis(candles: Candle[], signals = true) {
 }
 
 export function runBacktest(candles: Candle[], horizon: number, minScore: number, onProgress: (p: number) => void) {
-  return new Promise<BacktestResult>((resolve) => {
+  return new Promise<BacktestResult | null>((resolve) => {
     const reqId = ++seq;
     progress.set(reqId, onProgress);
     waiting.set(reqId, (d) => resolve(d.result));
@@ -29,7 +29,7 @@ export function runBacktest(candles: Candle[], horizon: number, minScore: number
 }
 
 export function runStrategy(candles: Candle[], opts: StrategyOpts, onProgress: (p: number) => void) {
-  return new Promise<StrategyResult>((resolve) => {
+  return new Promise<StrategyResult | null>((resolve) => {
     const reqId = ++seq;
     progress.set(reqId, onProgress);
     waiting.set(reqId, (d) => resolve(d.result));

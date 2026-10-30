@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Nav from './Nav';
 import AccountMenu, { SaveHint } from './AccountMenu';
-import SymbolSearch from './SymbolSearch';
+import AddWizard from './AddWizard';
 import PortfolioImport from './PortfolioImport';
 import { CURRENCIES, makeCurrency, useFx } from '../fx';
-import { currencyOf, fetchCandles, fetchLivePrices, fundInst, searchFunds, type FundHit } from '../data';
-import { analyse, benchmarkFor, shortName, summarise, usePortfolioData, usePortfolios, type NewLot, type Stat, type Verdict } from '../portfolio';
+import { currencyOf, fetchLivePrices } from '../data';
+import { analyse, benchmarkFor, shortName, summarise, usePortfolioData, usePortfolios, type Stat, type Verdict } from '../portfolio';
 import { Grades, Signature } from './PortfolioInsights';
 import { MARKETS, loadMarket, saveMarket, type MarketId } from '../markets';
 import { SIGNAL_LABEL, SIGNAL_TONE, computeInsights, decide, type Ai, type Call } from '../portfolioInsights';
 import PortfolioNews from './PortfolioNews';
 import PortfolioDeep from './PortfolioDeep';
 import PortfolioWhy from './PortfolioWhy';
+import StockLink from './StockLink';
+import { PlanCard, PlanCheck, type PlanMap } from './PortfolioPlan';
+import { HORIZON_LABEL, planStatus } from '../portfolioPlan';
 import { useDeep } from '../portfolioDeep';
 import { runAnalysis } from '../engine/client';
 import { advise } from '../engine/patterns.js';
@@ -128,6 +131,7 @@ export default function Portfolio() {
 
   const deep = useDeep(stats, candles);
   const calls = useMemo(() => new Map<string, Call>(stats.map((s) => [s.h.id, decide(s, ai[s.h.inst.id], deep[s.h.id]?.quality)])), [stats, ai, sum, deep]);
+  const plans = useMemo<PlanMap>(() => new Map(stats.filter((s) => s.h.plan).map((s) => [s.h.id, planStatus(s, s.h.plan!, calls.get(s.h.id))])), [stats, calls]);
   const ins = useMemo(() => computeInsights(stats, sum, candles, prices, conv), [stats, sum, candles, prices]); // eslint-disable-line react-hooks/exhaustive-deps
   const jump = (id: string) => { setOpen(id); setTimeout(() => document.getElementById('pf-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
 
@@ -178,7 +182,7 @@ export default function Portfolio() {
             <option value="weight">Biggest holding</option><option value="pnlPct">Profit %</option><option value="alpha">Vs market</option><option value="verdict">Needs attention first</option>
           </select></label>}
         </div>
-        {panel === 'add' && <AddForm onAdd={(l) => { pf.addLots([l]); }} market={market} setMarket={setMarket} />}
+        {panel === 'add' && <AddWizard onAdd={(l) => { pf.addLots([l]); }} market={market} setMarket={setMarket} />}
         {panel === 'import' && <PortfolioImport hasHoldings={holdings.length > 0} onImport={(items, replace) => { pf.addLots(items, replace); setPanel(null); }} />}
 
         {!holdings.length ? (
@@ -248,6 +252,8 @@ export default function Portfolio() {
               </div>
             </section>
 
+            <PlanCheck rows={rows} plans={plans} value={(s) => s.value * conv(s.ccy)} onOpen={jump} />
+
             <section className="pf-box">
               <h3>Your holdings</h3>
               <div className="ov-list">
@@ -257,7 +263,8 @@ export default function Portfolio() {
                   return (
                     <div key={s.h.id} id={'pf-' + s.h.id} className={`ov-row ${open === s.h.id ? 'open' : ''}`}>
                       <button className="ov-line" onClick={() => setOpen(open === s.h.id ? null : s.h.id)}>
-                        <span className="ov-name"><b>{shortName(s.h.inst)}</b><small>{s.isFund ? (s.debt ? 'Debt fund' : 'Mutual fund') : s.h.inst.name.split(' · ')[0]}</small></span>
+                        <span className="ov-name"><b><StockLink inst={s.h.inst}>{shortName(s.h.inst)}</StockLink></b><small>{s.isFund ? (s.debt ? 'Debt fund' : 'Mutual fund') : s.h.inst.name.split(' · ')[0]}</small>
+                          {s.h.plan && <small className={`ov-plan ${plans.get(s.h.id)?.tone ?? ''}`}>{HORIZON_LABEL[s.h.plan.horizon]} · {plans.get(s.h.id)?.label}</small>}</span>
                         <Spark data={s.spark} up={s.spark.length < 2 || s.spark[s.spark.length - 1] >= s.spark[0]} />
                         <span className="ov-val"><b>{money.money(s.value * f)}</b><i className="ov-w"><u style={{ width: `${Math.min(100, s.weight)}%` }} /></i></span>
                         <span className={`ov-pl ${tone(s.pnl)}`}>{sgn(s.pnlPct)}<small>{signed(s.pnl * f)}</small></span>
@@ -292,6 +299,7 @@ function Detail({ s, call, ai, pf, onChart, onDeep, onWhy, onNews }: { s: Stat; 
   return (
     <div className="pf-det">
       <div className="pf-det-l">
+        <PlanCard s={s} call={call} onSave={(p) => pf.setPlan(s.h.id, p)} />
         {call && <div className={`pf-say ${SIGNAL_TONE[call.signal]}`}><b>{SIGNAL_LABEL[call.signal]} ({call.conf.toLowerCase()} confidence).</b> {call.why}</div>}
         <div className={`pf-say ${VERDICT[s.verdict][1]}`}><b>{VERDICT[s.verdict][0]}.</b> {s.action}</div>
         {ai && <div className="pf-say neu"><b>Chart AI:</b> {ai.action === 'WAIT' ? 'no clear setup' : `${ai.action} setup`} ({ai.conf}% confidence). Closest pattern: {ai.pattern} {ai.patScore}%.</div>}
@@ -321,88 +329,6 @@ function Detail({ s, call, ai, pf, onChart, onDeep, onWhy, onNews }: { s: Stat; 
         ))}
         <p className="small">Adding the buy date lets us compare your stock with the market from the day you bought.</p>
       </div>
-    </div>
-  );
-}
-
-function FundSearch({ onPick }: { onPick(h: FundHit): void }) {
-  const [q, setQ] = useState('');
-  const [items, setItems] = useState<FundHit[]>([]);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (q.trim().length < 3) { setItems([]); return; }
-    let stale = false;
-    const t = setTimeout(async () => { const r = await searchFunds(q); if (!stale) setItems(r.slice(0, 30)); }, 300);
-    return () => { stale = true; clearTimeout(t); };
-  }, [q]);
-  return (
-    <div className="symsearch">
-      <input value={q} placeholder="Type the fund name, e.g. parag parikh flexi" spellCheck={false} style={{ textTransform: 'none' }}
-        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
-      {open && items.length > 0 && (
-        <ul className="sresults">
-          {items.map((h) => <li key={h.code} onMouseDown={() => { onPick(h); setQ(h.name); setOpen(false); }}><span>{h.name}</span></li>)}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function AddForm({ onAdd, market, setMarket }: { onAdd(l: NewLot): void; market: MarketId; setMarket(m: MarketId): void }) {
-  const [kind, setKind] = useState<'stock' | 'fund'>('stock');
-  const [inst, setInst] = useState<Instrument | null>(null);
-  const [qty, setQty] = useState('');
-  const [price, setPrice] = useState('');
-  const [current, setCurrent] = useState('');
-  const [date, setDate] = useState('');
-  const [now, setNow] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const pick = async (i: Instrument) => {
-    setInst(i); setNow(null);
-    const q = (await fetchLivePrices([i]))[i.id];
-    if (q) setNow(q.price);
-  };
-  const switchKind = (k: 'stock' | 'fund') => { setKind(k); setInst(null); setNow(null); setQty(''); setPrice(''); setCurrent(''); };
-  const ok = !!inst && !busy && (kind === 'stock' ? +qty > 0 && +price > 0 : +price > 0 && +current > 0);
-  const submit = async () => {
-    if (!inst || !ok) return;
-    if (kind === 'stock') onAdd({ inst, qty: +qty, price: +price, date: date || undefined });
-    else {
-      // a fund app shows money, not units: units = current value / latest NAV, average NAV = invested / units
-      setBusy(true);
-      const c = await fetchCandles(inst, '1D', 3);
-      setBusy(false);
-      if (!c) { alert('Could not load this fund\'s price right now. Try again in a moment.'); return; }
-      const units = +current / c[c.length - 1].close;
-      onAdd({ inst, qty: units, price: +price / units, date: date || undefined });
-    }
-    setInst(null); setQty(''); setPrice(''); setCurrent(''); setDate(''); setNow(null);
-  };
-
-  return (
-    <div className="pf-add">
-      <div className="segc" style={{ flexBasis: '100%', margin: 0 }}>
-        <button className={kind === 'stock' ? 'on buy' : ''} onClick={() => switchKind('stock')}>Stock / ETF</button>
-        <button className={kind === 'fund' ? 'on buy' : ''} onClick={() => switchKind('fund')}>Mutual fund (India)</button>
-      </div>
-      <label className="fld">{kind === 'stock' ? 'Stock' : 'Fund'}
-        {kind === 'stock'
-          ? <SymbolSearch current={{ id: inst?.id ?? '', name: '', source: 'yahoo' }} onPick={pick} market={market} onMarket={setMarket} />
-          : <FundSearch onPick={(h) => setInst(fundInst(h))} />}
-      </label>
-      {kind === 'stock' ? <>
-        <label className="fld">Quantity<input type="number" min="0" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 10" /></label>
-        <label className="fld">Buy price (per share){now !== null && <em className="pf-hint" onClick={() => setPrice(String(now))}>now {now} · use</em>}<input type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 2450" /></label>
-      </> : <>
-        <label className="fld">Amount invested (₹)<input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 70000" /></label>
-        <label className="fld">Current value (₹)<input type="number" min="0" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="e.g. 68000" /></label>
-      </>}
-      <label className="fld">{kind === 'stock' ? 'Bought on (optional)' : 'First invested on (optional)'}<input type="date" value={date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} /></label>
-      <button className="mini buyb pf-addbtn" disabled={!ok} onClick={submit}>{busy ? 'Adding…' : 'Add'}</button>
-      <p className="small pf-addnote">{kind === 'stock'
-        ? 'Bought the same stock in several lots? Add it again; lots are combined. For US stocks use the plain symbol (AAPL); for India search the company name and pick the one ending in .NS.'
-        : 'Both amounts are on the fund\'s page in your app (Invested and Current). Pick the Direct / Growth version that matches yours. The buy date is optional; if you invested through a SIP, leave it blank.'}</p>
     </div>
   );
 }

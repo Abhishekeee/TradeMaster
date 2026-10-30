@@ -1,11 +1,11 @@
-import { TF_SEC, type Candle, type Instrument, type Quote } from './types';
+import { MONTH_TFS, TF_SEC, type Candle, type Instrument, type Quote } from './types';
 
 /** Base URL of the API proxy; empty in dev (Vite serves /api), set at build time for static hosting. */
 export const API: string = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');
 
 /* ---------------------------------------------------------------- Binance (crypto) */
 const HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com'];
-const BINANCE_IV: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w' };
+const BINANCE_IV: Record<string, string> = { '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w', '1M': '1M', '3M': '1M', '6M': '1M', '1Y': '1M' };
 
 async function binancePage(symbol: string, tf: string, limit: number, endTime?: number): Promise<Candle[] | null> {
   for (const h of HOSTS) {
@@ -21,6 +21,8 @@ async function binancePage(symbol: string, tf: string, limit: number, endTime?: 
 
 /** Binance returns at most 1000 candles per call, so longer histories are fetched page by page, walking backwards in time. */
 async function binanceCandles(symbol: string, tf: string, limit: number): Promise<Candle[] | null> {
+  const n = MONTH_TFS[tf] ?? 1;
+  if (n > 1) { const m = await binanceCandles(symbol, '1M', limit * n); return m ? monthly(m, n).slice(-limit) : null; }
   let out = (await binancePage(symbol, tf, Math.min(limit, 1000))) ?? null;
   while (out && out.length < limit) {
     const older = await binancePage(symbol, tf, Math.min(limit - out.length, 1000), out[0].time * 1000 - 1);
@@ -35,6 +37,12 @@ async function binanceCandles(symbol: string, tf: string, limit: number): Promis
 // Currency each Yahoo symbol is quoted in, learned from the data itself (meta.currency)
 const ccyCache = new Map<string, string>();
 
+const IV_SEC: Record<string, number> = { '1m': 60, '5m': 300, '15m': 900, '30m': 1800, '60m': 3600 };
+
+// When the latest regular session closes (unix seconds), learned from the chart data
+const sessionEnds = new Map<string, number>();
+export const sessionEnd = (id: string) => sessionEnds.get(id);
+
 /** Currency the instrument's price is quoted in. */
 export function currencyOf(inst: Instrument): string {
   if (inst.source === 'binance') return 'USD';
@@ -47,14 +55,53 @@ export function currencyOf(inst: Instrument): string {
   return 'USD';
 }
 
+/** Joins monthly candles into bars of `n` calendar months (3 = quarter, 6 = half-year, 12 = year). */
+function monthly(c: Candle[], n: number): Candle[] {
+  const out: Candle[] = [];
+  for (const k of c) {
+    const d = new Date((k.time + 43200) * 1000);   // +12h so a month that opens late the evening before (e.g. Sydney) still lands in the right month
+    const y = d.getUTCFullYear(), b = Math.floor(d.getUTCMonth() / n) * n;
+    const t = Date.UTC(y, b, 1) / 1000;
+    const last = out[out.length - 1];
+    if (last && last.time === t) {
+      last.high = Math.max(last.high, k.high); last.low = Math.min(last.low, k.low);
+      last.close = k.close; last.volume += k.volume;
+    } else out.push({ ...k, time: t });
+  }
+  return out;
+}
+
+/**
+ * Yahoo's weekly bars are not always stamped on the Monday: the running week is often stamped with today's date, and the
+ * history may carry a different time of day. Without this the same week shows up twice (a second, thin candle).
+ */
+function weekly(c: Candle[]): Candle[] {
+  const out: Candle[] = [];
+  for (const k of c) {
+    const d = new Date((k.time + 43200) * 1000);
+    const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)) / 1000;
+    const last = out[out.length - 1];
+    if (last && last.time === t) {
+      last.high = Math.max(last.high, k.high); last.low = Math.min(last.low, k.low);
+      last.close = k.close; last.volume += k.volume;
+    } else if (!last || t > last.time) out.push({ ...k, time: t });
+  }
+  return out;
+}
+
 const YAHOO: Record<string, { iv: string; range: string; agg?: number }> = {
   '1m': { iv: '1m', range: '7d' },
   '5m': { iv: '5m', range: '60d' },
   '15m': { iv: '15m', range: '60d' },
+  '30m': { iv: '30m', range: '60d' },
   '1h': { iv: '60m', range: '1y' },
   '4h': { iv: '60m', range: '2y', agg: 14400 },
   '1D': { iv: '1d', range: '10y' },
   '1W': { iv: '1wk', range: '20y' },
+  '1M': { iv: '1mo', range: 'max' },
+  '3M': { iv: '1mo', range: 'max' },
+  '6M': { iv: '1mo', range: 'max' },
+  '1Y': { iv: '1mo', range: 'max' },
 };
 
 function aggregate(c: Candle[], size: number): Candle[] {
@@ -71,7 +118,7 @@ function aggregate(c: Candle[], size: number): Candle[] {
 }
 
 // Short ranges are enough to refresh the latest candles while polling (the full history is only fetched once)
-const YAHOO_POLL_RANGE: Record<string, string> = { '1m': '1d', '5m': '1d', '15m': '1d', '1h': '5d', '4h': '5d', '1D': '5d', '1W': '1mo' };
+const YAHOO_POLL_RANGE: Record<string, string> = { '1m': '1d', '5m': '1d', '15m': '1d', '30m': '1d', '1h': '5d', '4h': '5d', '1D': '5d', '1W': '1mo', '1M': '6mo', '3M': '2y', '6M': '2y', '1Y': '2y' };
 
 async function yahooRaw(symbol: string, tf: string, range: string): Promise<{ candles: Candle[]; marketTime: number } | null> {
   const m = YAHOO[tf];
@@ -87,8 +134,25 @@ async function yahooRaw(symbol: string, tf: string, range: string): Promise<{ ca
       if (out.length && out[out.length - 1].time >= t) return;
       out.push({ time: t, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume?.[i] ?? 0 });
     });
+    // After the close Yahoo adds an empty placeholder as the last intraday candle (flat, no volume) while real candles
+    // before it trade. It would stand in as "the current candle" and give every intraday timeframe the same change.
+    const ivSec = IV_SEC[m.iv];
+    const closeAt = res.meta?.currentTradingPeriod?.regular?.end;
+    for (let k = 0; ivSec && k < 2 && out.length > 2; k++) {
+      const l = out[out.length - 1], p = out[out.length - 2];
+      const flat = l.open === l.close && l.high === l.low && l.high === l.open;
+      const afterClose = typeof closeAt === 'number' && l.time >= closeAt;                       // starts after the bell
+      const marker = flat && (l.time - p.time < ivSec * 0.9 || (l.volume === 0 && p.volume > 0));  // a "latest price" stamp, not a real candle
+      if (afterClose || marker) out.pop(); else break;
+    }
     if (res.meta?.currency) ccyCache.set(symbol, res.meta.currency);
+    // only for markets that really close each day (forex and crypto trade around the clock, so they have no closing bell)
+    const openAt = res.meta?.currentTradingPeriod?.regular?.start;
+    if (typeof closeAt === 'number' && typeof openAt === 'number' && closeAt - openAt < 20 * 3600) sessionEnds.set(symbol, closeAt);
+    else sessionEnds.delete(symbol);
     if (m.agg) out = aggregate(out, m.agg);
+    if (tf === '1W') out = weekly(out);
+    else if (MONTH_TFS[tf] >= 1) out = monthly(out, MONTH_TFS[tf]);   // also for plain 1M: the running month can come stamped mid-month
     return out.length ? { candles: out, marketTime: res.meta?.regularMarketTime ?? 0 } : null;
   } catch { return null; }
 }
@@ -114,6 +178,42 @@ export async function fetchDaily(symbol: string, range = '1y'): Promise<Candle[]
     });
     return out.length ? out : null;
   } catch { return null; }
+}
+
+/** What a stock really traded at on each day: the lowest and highest price, as people saw it then (not adjusted for later splits or bonuses). */
+export interface DayRange { date: string; low: number; high: number; close: number }
+const rangeCache = new Map<string, Promise<DayRange[] | null>>();
+
+export function fetchDayRanges(inst: Instrument): Promise<DayRange[] | null> {
+  if (inst.source !== 'yahoo') return Promise.resolve(null);
+  let p = rangeCache.get(inst.id);
+  if (!p) {
+    p = (async () => {
+      try {
+        const r = await fetch(`${API}/api/yahoo/v8/finance/chart/${encodeURIComponent(inst.id)}?interval=1d&period1=0&period2=${Math.floor(Date.now() / 1000) + 86400}&includePrePost=false&events=split`);
+        if (!r.ok) return null;
+        const res = (await r.json())?.chart?.result?.[0];
+        const q = res?.indicators?.quote?.[0];
+        if (!res?.timestamp || !q) return null;
+        // Yahoo shows old prices divided by every later split / bonus; multiply them back to what was paid at the time
+        const splits = (Object.values(res.events?.splits ?? {}) as { date: number; numerator: number; denominator: number }[])
+          .filter((s) => s.numerator > 0 && s.denominator > 0).sort((a, b) => a.date - b.date);
+        const out: DayRange[] = [];
+        let factor = splits.reduce((f, s) => f * (s.numerator / s.denominator), 1), si = 0;
+        res.timestamp.forEach((t: number, i: number) => {
+          while (si < splits.length && splits[si].date <= t) { factor /= splits[si].numerator / splits[si].denominator; si++; }
+          if (q.low[i] == null || q.high[i] == null) return;
+          const date = new Date((t + 43200) * 1000).toISOString().slice(0, 10);   // +12h: a market that opens the evening before (Sydney) still lands on its own day
+          if (out.length && out[out.length - 1].date === date) return;
+          out.push({ date, low: q.low[i] * factor, high: q.high[i] * factor, close: (q.close[i] ?? q.high[i]) * factor });
+        });
+        return out.length ? out : null;
+      } catch { return null; }
+    })();
+    rangeCache.set(inst.id, p);
+    p.then((v) => { if (!v) rangeCache.delete(inst.id); });   // do not remember a failure
+  }
+  return p;
 }
 
 export async function fetchCandles(inst: Instrument, tf: string, limit = 500): Promise<Candle[] | null> {
@@ -366,7 +466,8 @@ export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => 
     const c = await binanceCandles(inst.id, tf, 2);
     if (!dead && c) c.forEach(onCandle);
   };
-  const startPoll = () => { if (fallback === undefined) { poll(); fallback = window.setInterval(poll, 2000); } };
+  const slow = (MONTH_TFS[tf] ?? 1) > 1;   // no stream for quarter / half-year / year bars: poll them instead
+  const startPoll = () => { if (fallback === undefined) { poll(); fallback = window.setInterval(poll, slow ? 5000 : 2000); } };
   const stopPoll = () => { if (fallback !== undefined) { clearInterval(fallback); fallback = undefined; } };
 
   const connect = () => {
@@ -374,13 +475,13 @@ export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => 
     onState('connecting');
     const sock = new WebSocket(`${hosts[host % hosts.length]}/stream?streams=${sym}@kline_${BINANCE_IV[tf]}/${sym}@aggTrade`);
     ws = sock;
-    sock.onopen = () => { retry = 0; lastMsg = Date.now(); stopPoll(); onState('live'); };
+    sock.onopen = () => { retry = 0; lastMsg = Date.now(); if (!slow) stopPoll(); onState('live'); };
     sock.onmessage = (ev) => {
       lastMsg = Date.now();
       const m = JSON.parse(ev.data).data;
       if (!m) return;
       if (m.e === 'aggTrade') onTick?.(+m.p);
-      else if (m.k) onCandle({ time: Math.floor(m.k.t / 1000), open: +m.k.o, high: +m.k.h, low: +m.k.l, close: +m.k.c, volume: +m.k.v });
+      else if (m.k && !slow) onCandle({ time: Math.floor(m.k.t / 1000), open: +m.k.o, high: +m.k.h, low: +m.k.l, close: +m.k.c, volume: +m.k.v });
     };
     const lost = () => {
       if (dead || ws !== sock) return;
@@ -392,6 +493,7 @@ export function openFeed(inst: Instrument, tf: string, onCandle: (c: Candle) => 
     sock.onerror = () => sock.close();
   };
   connect();
+  if (slow) startPoll();
 
   // a silent socket is as bad as a closed one: restart it
   const watchdog = window.setInterval(() => { if (ws && Date.now() - lastMsg > 15000) ws.close(); }, 5000);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { searchInstruments } from '../data';
+import Floating, { inFloat } from './Floating';
 import { CATEGORIES, MARKETS, inMarket, type MarketId } from '../markets';
 import type { Instrument } from '../types';
 
@@ -46,7 +47,7 @@ export default function SymbolSearch({ current, onPick, market = 'ALL', onMarket
   const label = MARKETS.find((m) => m.id === market)?.label ?? '';
 
   useEffect(() => {
-    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node) && !inFloat(e.target)) setOpen(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
@@ -71,7 +72,7 @@ export default function SymbolSearch({ current, onPick, market = 'ALL', onMarket
         }}
       />
       {open && (
-        <ul className="sresults">
+        <Floating anchor={box} className="sresults" width={Math.max(box.current?.offsetWidth ?? 0, 340)}>
           {!text.trim() && market !== 'ALL' && items.length > 0 && <li className="small sres-head">{label}: top names. Type to search for any other.</li>}
           {items.map((i, n) => (
             <li key={i.source + i.id} className={n === hi ? 'hi' : ''} onMouseEnter={() => setHi(n)} onMouseDown={() => pick(i)}>
@@ -82,7 +83,7 @@ export default function SymbolSearch({ current, onPick, market = 'ALL', onMarket
           {hidden > 0 && onMarket && !busy && (
             <li className="sres-more" onMouseDown={() => { onMarket('ALL'); }}>{hidden} more result{hidden > 1 ? 's' : ''} in other markets. <b>Search all markets</b></li>
           )}
-        </ul>
+        </Floating>
       )}
     </div>
   );

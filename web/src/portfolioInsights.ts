@@ -2,19 +2,19 @@ import type { Candle } from './types';
 import { benchmarkFor, closeOn, type Stat, type Summary } from './portfolio';
 
 /* ---------------------------------------------------------------- one clear call per holding */
-export type Signal = 'BUY' | 'HOLD' | 'TRIM' | 'SELL' | 'REVIEW';
+export type Signal = 'BUY' | 'HOLD' | 'BOOK' | 'SELL' | 'REVIEW';
 export type Level = 'Low' | 'Medium' | 'High';
 export interface Call { signal: Signal; conf: Level; why: string }
 /** Second opinion from the chart-pattern engine that powers the Charts page (stocks only). */
 export interface Ai { action: 'BUY' | 'SELL' | 'WAIT'; conf: number; pattern: string; patScore: number }
 
-export const SIGNAL_LABEL: Record<Signal, string> = { BUY: 'Buy more', HOLD: 'Hold', TRIM: 'Trim', SELL: 'Sell', REVIEW: 'Review' };
-export const SIGNAL_TONE: Record<Signal, string> = { BUY: 'up', HOLD: 'neu', TRIM: 'neu', SELL: 'down', REVIEW: 'neu' };
+export const SIGNAL_LABEL: Record<Signal, string> = { BUY: 'Buy more', HOLD: 'Hold', BOOK: 'Book profit', SELL: 'Sell', REVIEW: 'Review' };
+export const SIGNAL_TONE: Record<Signal, string> = { BUY: 'up', HOLD: 'neu', BOOK: 'neu', SELL: 'down', REVIEW: 'neu' };
 const LEVELS: Level[] = ['Low', 'Medium', 'High'];
 const bump = (l: Level, d: number): Level => LEVELS[Math.max(0, Math.min(2, LEVELS.indexOf(l) + d))];
 
 /**
- * Turns the analysis of one holding into Buy more / Hold / Trim / Sell / Review. The rules are deliberately cautious:
+ * Turns the analysis of one holding into Buy more / Hold / Book profit / Sell / Review. The rules are deliberately cautious:
  * selling needs a weak chart AND trailing the market AND a down-trend; buying needs a strong chart that is not stretched
  * and a position that is not already large. Price history only, so it is a prompt to think, not advice.
  */
@@ -38,9 +38,9 @@ export function decide(s: Stat, ai?: Ai | null, quality?: number | null): Call {
     } else if (s.trend === 'Downtrend' && s.pnlPct > 0) c = { signal: 'SELL', conf: 'Low', why: 'In profit, but the trend has turned down. Consider booking it.' };
     else c = { signal: 'REVIEW', conf: 'Medium', why: 'Lagging the market. Watch it closely and sell if it breaks lower.' };
   } else if (s.weight > 30 && !s.isFund) {
-    c = { signal: 'TRIM', conf: 'Medium', why: `It is ${s.weight.toFixed(0)}% of your portfolio. Trimming spreads the risk, even though it is doing fine.` };
+    c = { signal: 'BOOK', conf: 'Medium', why: `It is ${s.weight.toFixed(0)}% of your portfolio. Booking part of the profit spreads the risk, even though it is doing fine.` };
   } else if (s.verdict === 'good' && stretched) {
-    c = { signal: 'TRIM', conf: 'Medium', why: 'Doing very well, but the price looks stretched. Consider booking part of the profit.' };
+    c = { signal: 'BOOK', conf: 'Medium', why: 'Doing very well, but the price looks stretched. Consider booking part of the profit.' };
   } else if (s.verdict === 'good' && s.trend === 'Uptrend' && s.weight < 20 && (s.rsi ?? 50) < 68) {
     c = { signal: 'BUY', conf: (s.alpha ?? 0) > 10 && (s.r3m ?? 0) > 5 ? 'High' : 'Medium', why: 'Strong trend, beating the market and not stretched. There is room to add.' };
   } else if (s.rsi !== null && s.rsi <= 35 && s.above200 && (s.fromHigh ?? 0) < -15) {
@@ -59,7 +59,7 @@ export function decide(s: Stat, ai?: Ai | null, quality?: number | null): Call {
 
   if (ai && !s.isFund) {
     const aiDir = ai.action === 'BUY' ? 1 : ai.action === 'SELL' ? -1 : 0;
-    const dir = c.signal === 'BUY' ? 1 : c.signal === 'SELL' || c.signal === 'TRIM' ? -1 : 0;
+    const dir = c.signal === 'BUY' ? 1 : c.signal === 'SELL' || c.signal === 'BOOK' ? -1 : 0;
     if (dir !== 0 && aiDir === dir) c = { ...c, conf: bump(c.conf, 1), why: c.why + ' The chart-pattern AI agrees.' };
     else if (dir === 0 && aiDir === -1 && ai.conf >= 60 && s.trend === 'Downtrend') c = { signal: 'REVIEW', conf: 'Low', why: c.why + ' The chart-pattern AI sees a bearish setup and the trend is down, so keep a close eye on it.' };
     else if (dir !== 0 && aiDir === -dir) {

@@ -6,7 +6,7 @@ import { cls, word, type Analysis, type BacktestResult, type MtfRow, type Signal
 interface Props {
   analysis: Analysis; symbol: string; tf: string; sel: string | null; signals: Signal[];
   onSelect(id: string): void; onTf(tf: string): void; scan(): Promise<MtfRow[]>; onSetup(): void;
-  backtest(h: number, min: number, onProgress: (p: number) => void): Promise<BacktestResult>;
+  backtest(h: number, min: number, onProgress: (p: number) => void): Promise<BacktestResult | null>;
 }
 
 export default function Panel({ analysis: r, symbol, tf, sel, signals, onSelect, onTf, scan, backtest, onSetup }: Props) {

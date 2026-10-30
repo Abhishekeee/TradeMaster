@@ -70,7 +70,8 @@ const ChartView = forwardRef<ChartApi, Props>(function ChartView(p, ref) {
 
   function paintAll() {
     const c = data.current;
-    if (!main.current || !c.length) return;
+    if (!main.current) return;
+    if (!c.length) { [main, vol, e20, e50, bbU, bbM, bbL, vw].forEach((s) => s.current?.setData([])); return; }
     main.current.setData(c.map((k) => val(k)) as never);
     vol.current!.setData(c.map((k) => ({ time: k.time as Time, value: k.volume, color: k.close >= k.open ? '#2ee6a644' : '#ff5d7a44' })));
     const closes = c.map((k) => k.close);

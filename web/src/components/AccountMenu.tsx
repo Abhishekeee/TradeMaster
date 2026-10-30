@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Floating, { inFloat } from './Floating';
 import { KIND, cloudAvailable, resolveConflict, signIn, signOut, syncNow, useAccount } from '../cloud';
 
 /** Sign in with Google to keep portfolios, watchlist and paper trading across devices. Hidden when sign-in is not set up. */
@@ -8,7 +9,7 @@ export default function AccountMenu() {
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node) && !inFloat(e.target)) setOpen(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
@@ -32,14 +33,14 @@ export default function AccountMenu() {
             <i className={`acct-dot ${a.status}`} />
           </button>
           {open && (
-            <div className="acct-menu">
+            <Floating anchor={box} className="acct-menu" width={270} align="right">
               <div><b>{u.name}</b><div className="small">{u.email}</div></div>
               <div className={`small acct-line ${a.status === 'error' ? 'down' : ''}`}>{line}</div>
               <button className="mini" onClick={() => { syncNow(); }}>Sync now</button>
               <button className="mini" onClick={() => signOut(false)}>Sign out</button>
               <button className="mini danger" title="Sign out and remove this account's saved data from this browser (it stays safe in your account)" onClick={() => { if (confirm('Sign out and clear the saved data on this device? It stays in your account, and comes back when you sign in again.')) signOut(true); }}>Sign out and clear this device</button>
               <p className="small">Your portfolios, watchlist, alerts, paper trading and settings are saved to your account.</p>
-            </div>
+            </Floating>
           )}
         </>
       )}

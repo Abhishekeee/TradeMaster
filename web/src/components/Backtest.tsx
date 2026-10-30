@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BacktestResult, BtStat } from '../types';
 
-interface Props { symbol: string; tf: string; run(horizon: number, minScore: number, onProgress: (p: number) => void): Promise<BacktestResult> }
+interface Props { symbol: string; tf: string; run(horizon: number, minScore: number, onProgress: (p: number) => void): Promise<BacktestResult | null> }
 
 const edgeCls = (e: number, n: number) => (n < 15 ? 'neu' : e >= 5 ? 'up' : e <= -5 ? 'down' : 'neu');
 

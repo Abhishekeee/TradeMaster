@@ -1,3 +1,4 @@
+import Floating, { inFloat } from './Floating';
 import { useEffect, useRef, useState } from 'react';
 
 export interface Toggles { sig: boolean; e20: boolean; e50: boolean; vol: boolean; sr: boolean; bb: boolean; vwap: boolean; rsi: boolean; macd: boolean }
@@ -19,7 +20,7 @@ export default function IndicatorsMenu({ tg, setTg }: Props) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node) && !inFloat(e.target)) setOpen(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
@@ -28,14 +29,14 @@ export default function IndicatorsMenu({ tg, setTg }: Props) {
     <div className="popwrap" ref={box}>
       <button className="theme" onClick={() => setOpen(!open)} title="Chart overlays">ƒx Indicators <span className="small">{on}</span> ▾</button>
       {open && (
-        <div className="popover">
+        <Floating anchor={box} className="popover" width={260}>
           {ITEMS.map(([k, label, hint]) => (
             <label key={k} className="popitem" title={hint}>
               <input type="checkbox" checked={tg[k]} onChange={(e) => setTg({ ...tg, [k]: e.target.checked })} />
               <span>{label}<em className="small">{hint}</em></span>
             </label>
           ))}
-        </div>
+        </Floating>
       )}
     </div>
   );

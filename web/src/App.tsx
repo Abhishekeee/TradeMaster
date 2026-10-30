@@ -20,14 +20,18 @@ import { usePaper, netPnl } from './paper';
 import { CURRENCIES, makeCurrency, useFx } from './fx';
 import SymbolSearch from './components/SymbolSearch';
 import { DEFAULT_INST, MARKETS, inMarket, type MarketId } from './markets';
-import { currencyOf, demoData, fetchCandles, fetchHistory, openFeed, openTicks, type FeedStatus } from './data';
+import { currencyOf, demoData, fetchBoard, fetchCandles, fetchHistory, openFeed, openTicks, sessionEnd, type FeedStatus } from './data';
 import { setPrice as pushPrice } from './priceStore';
+import { candleChange, type CandleChange } from './candleChange';
+import { periodChange, periodSource } from './periodChange';
+import PeriodBadge from './components/PeriodBadge';
+import Info from './components/Info';
 import LiveBar from './components/LiveBar';
 import Timeframe from './components/Timeframe';
 import { runAnalysis, runBacktest, runStrategy } from './engine/client';
-import { TFS, cls, fmt, word, type Advice, type Analysis, type BacktestResult, type StrategyResult, type Candle, type Instrument, type MtfRow, type Signal } from './types';
+import { MONTH_TFS, TFS, TF_SEC, cls, fmt, word, type Advice, type Analysis, type BacktestResult, type StrategyResult, type Candle, type Instrument, type MtfRow, type Signal } from './types';
 
-const HIGHER: Record<string, string> = { '1m': '15m', '5m': '1h', '15m': '1h', '1h': '4h', '4h': '1D', '1D': '1W' };
+const HIGHER: Record<string, string> = { '1m': '15m', '5m': '1h', '15m': '1h', '30m': '4h', '1h': '4h', '4h': '1D', '1D': '1W', '1W': '1M', '1M': '3M', '3M': '1Y', '6M': '1Y' };
 
 function loadPrefs() {
   try { return JSON.parse(localStorage.getItem('tm') || '{}'); } catch { return {}; }
@@ -65,9 +69,13 @@ export default function App() {
   const [feed, setFeed] = useState<FeedStatus>('off');
   const [lastTick, setLastTick] = useState(0);
   const [demo, setDemo] = useState(false);
-  const [price, setPrice] = useState<{ px: number; ch: number } | null>(null);
+  const [price, setPrice] = useState<CandleChange | null>(null);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState('');                    // "SYMBOL|tf" of the data now on the chart; the live feed waits for it to match
+  const [advFail, setAdvFail] = useState(false);             // the advisor's checks could not run (too little history, or they failed)
+  const [day, setDay] = useState<number | null>(null);       // change since the previous close, the figure other platforms show
+  const [hist, setHist] = useState<{ key: string; c: Candle[] } | null>(null);   // daily or monthly closes for the timeframe's period change
 
   const [theme, setTheme] = useState<'dark' | 'light'>(prefs.theme === 'light' ? 'light' : 'dark');
   const [showMarkets, setShowMarkets] = useState(false);
@@ -131,19 +139,20 @@ export default function App() {
 
   const analyse = useCallback(async (reset: boolean) => {
     const { analysis: a, signals: s } = await runAnalysis(candles.current);
-    if (!a) { setAnalysis(null); setSignals([]); setSel(null); return; } // too little history: drop the previous symbol's results
+    if (!a || !a.charts?.length) { setAnalysis(null); setSignals([]); setSel(null); return; } // too little history: drop the previous symbol's results
     setAnalysis(a);
     setSignals(s);
     const top = a.charts[0];
     alerts.checkPattern(ctx.current.inst.id, ctx.current.tf, top.name, top.score, word(top.eff));
-    if (reset || !userSel.current) setSel(a.charts[0].score >= 30 ? a.charts[0].id : null);
+    if (reset || !userSel.current) setSel(top.score >= 30 ? top.id : null);
   }, []);
 
   const updatePrice = () => {
     const c = candles.current;
     if (c.length < 2) return;
-    const a = c[c.length - 1], b = c[c.length - 2];
-    setPrice({ px: a.close, ch: ((a.close - b.close) / b.close) * 100 });
+    const a = c[c.length - 1];
+    const chg = candleChange(c, tf, sessionEnd(inst.id));
+    if (chg) setPrice(chg);
     setPrices((p) => (p[inst.id] === a.close ? p : { ...p, [inst.id]: a.close }));
   };
 
@@ -151,19 +160,27 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setReady('');
+    // drop everything that belongs to the previous timeframe at once, so its figures and pattern lines never show under the new one
+    setPrice(null); setAnalysis(null); setSignals([]); setSel(null);
     userSel.current = false;
+    candles.current = [];   // never mix bars of the old timeframe with the new one while it loads
+    chartApi.current?.setCandles([]);
     (async () => {
-      let data = await fetchCandles(inst, tf, 500);
-      if (cancelled) return;
-      const isDemo = !data;
-      if (!data) { data = demoData(tf); setToast(`Couldn't load live data for ${symbol}. Showing demo data.`); }
-      setDemo(isDemo);
-      candles.current = data;
-      chartApi.current?.setCandles(data);
-      updatePrice();
-      if (data.length) { pushPrice(inst.id, data[data.length - 1].close); paper.onPrice(inst.id, data[data.length - 1].close); }
-      await analyse(true);
-      if (!cancelled) setLoading(false);
+      try {
+        let data = await fetchCandles(inst, tf, 500);
+        if (!data && !cancelled) { await new Promise((r) => setTimeout(r, 900)); data = cancelled ? null : await fetchCandles(inst, tf, 500); }   // one retry before falling back to demo data
+        if (cancelled) return;
+        const isDemo = !data;
+        if (!data) { data = demoData(tf); setToast(`Couldn't load live data for ${symbol}. Showing demo data.`); }
+        setDemo(isDemo);
+        candles.current = data;
+        chartApi.current?.setCandles(data);
+        updatePrice();
+        if (data.length) { pushPrice(inst.id, data[data.length - 1].close); paper.onPrice(inst.id, data[data.length - 1].close); }
+        await analyse(true);
+      } catch { if (!cancelled) setAnalysis(null); }
+      finally { if (!cancelled) { setLoading(false); setReady(`${inst.id}|${tf}`); } }
     })();
     try { localStorage.setItem('tm', JSON.stringify({ inst, tf, theme, display, market })); } catch { /* ignore */ }
     return () => { cancelled = true; };
@@ -171,7 +188,7 @@ export default function App() {
 
   // live stream: every tick goes to the chart once per screen frame; the rest of the page refreshes about 4 times a second
   useEffect(() => {
-    if (demo || loading) return;
+    if (demo || loading || ready !== `${inst.id}|${tf}`) return;   // not before this timeframe's own candles are on the chart
     let raf = 0;
     let ui: number | undefined;
     let pending: Candle | null = null;
@@ -206,7 +223,32 @@ export default function App() {
       commit(c);
     });
     return () => { stop(); cancelAnimationFrame(raf); clearTimeout(ui); clearTimeout(timer.current); timer.current = undefined; };
-  }, [inst, tf, demo, loading, analyse]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [inst, tf, demo, loading, ready, analyse]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the timeframe's own figure: the price now against the price one timeframe ago (5m: 5 min ago ... 1W: a week ago)
+  const src = periodSource(tf);
+  useEffect(() => {
+    if (demo || !src) return;
+    const key = `${inst.id}|${src}`;
+    let dead = false;
+    const load = () => fetchCandles(inst, src, src === '1m' ? 2000 : 4000).then((c) => { if (!dead && c) setHist({ key, c }); }).catch(() => undefined);
+    if (hist?.key !== key) load();
+    const t = src === '1m' ? window.setInterval(() => { if (!document.hidden) load(); }, 30000) : undefined;   // keep the minute history moving
+    return () => { dead = true; clearInterval(t); };
+  }, [inst, src, demo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const histFor = src && hist?.key === `${inst.id}|${src}` ? hist.c : null;
+  const period = useMemo(() => (demo || !price ? null : periodChange(tf, price.px, histFor)), [tf, price, histFor, demo]);
+
+  // change since the previous close (what TradingView and the brokers show), kept apart from the change of the current candle
+  useEffect(() => {
+    setDay(null);
+    if (demo || (inst.source !== 'yahoo' && inst.source !== 'binance')) return;
+    let dead = false;
+    const pull = () => { if (!document.hidden) fetchBoard([inst.id]).then((b) => { if (!dead && b[inst.id]) setDay(b[inst.id].chg); }).catch(() => undefined); };
+    pull();
+    const t = window.setInterval(pull, 15000);
+    return () => { dead = true; clearInterval(t); };
+  }, [inst, demo]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -215,17 +257,27 @@ export default function App() {
 
   // the advisor judges a setup by how that pattern performed here before (backtest on up to 5000 candles)
   useEffect(() => {
+    setBt(null); setStrat(null); setAdvFail(false);
     if (loading) return;
+    if (candles.current.length < 60) { setAdvFail(true); return; }   // a new listing: nothing to judge yet
     let dead = false;
-    setBt(null); setStrat(null);
+    // a stuck worker must not leave the advisor "reading" forever
+    const giveUp = window.setTimeout(() => { if (!dead) setAdvFail(true); }, 40000);
     (async () => {
-      const data = demo ? candles.current : (await fetchHistory(inst, tf)) ?? candles.current;
-      const r = await runBacktest(data, 20, 55, () => undefined);
-      if (!dead) setBt(r);
-      const st = await runStrategy(data, { target: 'tp1', minConf: 50, tf }, () => undefined);
-      if (!dead) setStrat(st);
+      try {
+        const data = demo ? candles.current : (await fetchHistory(inst, tf)) ?? candles.current;
+        const r = await runBacktest(data, 20, 55, () => undefined);
+        if (dead) return;
+        if (!r) { setAdvFail(true); return; }
+        setBt(r);
+        const st = await runStrategy(data, { target: 'tp1', minConf: 50, tf }, () => undefined);
+        if (dead) return;
+        if (!st) { setAdvFail(true); return; }
+        setStrat(st);
+      } catch { if (!dead) setAdvFail(true); }
+      finally { clearTimeout(giveUp); }
     })();
-    return () => { dead = true; };
+    return () => { dead = true; clearTimeout(giveUp); };
   }, [inst, tf, loading, demo]);
 
   // the bigger picture: what does the next timeframe up say?
@@ -233,7 +285,7 @@ export default function App() {
     const up = HIGHER[tf];
     setHtf(null); setHtfDone(false);
     if (loading) return;
-    if (demo || !up) { setHtfDone(true); return; }
+    if (demo || !up || candles.current.length < 60) { setHtfDone(true); return; }
     let dead = false;
     (async () => {
       try {
@@ -346,7 +398,7 @@ export default function App() {
   const selected = useMemo(() => (analysis && sel ? [...analysis.charts, ...analysis.candles].find((p) => p.id === sel) ?? null : null), [analysis, sel]);
 
   const scan = useCallback(async (): Promise<MtfRow[]> => {
-    return Promise.all(TFS.map(async ([label]) => {
+    return Promise.all(TFS.filter(([l]) => !(l in MONTH_TFS)).map(async ([label]) => {
       const d = demo ? demoData(label) : await fetchCandles(inst, label, 400);
       if (!d) return { label };
       const { analysis: a } = await runAnalysis(d, false);
@@ -444,7 +496,7 @@ export default function App() {
       </header>
 
       <div className="toolbar">
-        <LiveBar name={inst.name} kind={inst.kind} tfLabel={tf} symbol={symbol.replace(/.(NS|BO)$/, '')} leading={<button className={`star theme ${watch.has(inst.id) ? 'on' : ''}`} style={{ padding: '0 6px', border: 0, background: 'none', fontSize: 15 }} title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>} status={feed} demo={demo} px={price?.px ?? null} ch={price?.ch ?? null} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
+        <LiveBar name={inst.name} kind={inst.kind} tfLabel={tf} symbol={symbol.replace(/.(NS|BO)$/, '')} leading={<button className={`star theme ${watch.has(inst.id) ? 'on' : ''}`} style={{ padding: '0 6px', border: 0, background: 'none', fontSize: 15 }} title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>} status={feed} demo={demo} px={price?.px ?? prices[inst.id] ?? null} ch={price?.ch ?? null} day={day} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
         <span className="sp" />
         <Timeframe tf={tf} setTf={setTf} />
         <select value={type} aria-label="Chart type" onChange={(e) => setType(e.target.value as typeof type)}>
@@ -473,13 +525,14 @@ export default function App() {
                 <span className="hud-k">{status}</span><b>{top.name}</b><span className="hud-score">{top.score}%</span><span className={`tone ${cls(top.eff)}`}>{word(top.eff)}</span>
               </button>
               <div title="Overall reading of all signals, from bearish (−100) to bullish (+100)">
-                <span className="hud-k">Bias</span>
+                <span className="hud-k">Bias</span><Info><p><b>Bias</b> is one reading of all the signals together: trend, momentum and the patterns on the chart. It runs from −100 (strongly falling) to +100 (strongly rising). Near the middle means no clear direction.</p><p><b>Forming</b> (the box on the left) is the chart pattern taking shape now, and the % is how closely it matches the textbook shape.</p></Info>
                 <span className="bias"><i style={{ left: `${(Math.max(-100, Math.min(100, analysis.bias)) + 100) / 2}%` }} /></span>
                 <b className={cls(analysis.bias / 100)}>{analysis.label}</b>
               </div>
-              {cd.score >= 50 && <div><span className="hud-k">Candle</span><b>{cd.name}</b><span className={`tone ${cls(cd.eff)}`}>{word(cd.eff)}</span></div>}
+              {cd.score >= 50 && <div><span className="hud-k">Candle</span><Info><p>A candlestick pattern on the latest few candles. <b>Bullish</b> hints buyers are taking over, <b>bearish</b> that sellers are. The % is how closely it matches the textbook shape. One candle pattern alone is a weak signal.</p></Info><b>{cd.name}</b><span className={`tone ${cls(cd.eff)}`}>{word(cd.eff)}</span></div>}
             </>)}
           </div>
+          {!loading && <PeriodBadge period={period} day={day} tf={tf} px={price?.px ?? null} />}
           <ChartView ref={chartApi} theme={theme} lines={lines} type={type} ema20={tg.e20} ema50={tg.e50} vol={tg.vol} signalsOn={tg.sig} bb={tg.bb} vwap={tg.vwap} showLevels={tg.sr} levels={levels} symbolKey={inst.id} selected={selected} signals={signals} />
             {toast && <div className="toast">{toast}</div>}
           </div>
@@ -499,7 +552,7 @@ export default function App() {
             <button className={rtab === 'trade' ? 'on' : ''} onClick={() => setRtab('trade')}>Trade{paper.acc.positions.length ? ` (${paper.acc.positions.length})` : ''}</button>
           </div>
           {rtab === 'advisor'
-            ? <Advisor advice={advice} inst={inst} tf={tf} historyReady={bt !== null} strat={strat} showOnChart={showAdvice} setShowOnChart={setShowAdvice} onSend={sendAdvice} />
+            ? <Advisor advice={advice} unavailable={!loading && advFail ? (candles.current.length < 60 ? 'short' : 'failed') : null} bars={candles.current.length} setTf={setTf} inst={inst} tf={tf} historyReady={bt !== null} strat={strat} showOnChart={showAdvice} setShowOnChart={setShowAdvice} onSend={sendAdvice} />
             : rtab === 'stats'
             ? <Stats paper={paper} cur={cur} symbol={symbol} tf={tf} runStrategy={strategy} />
             : rtab === 'alerts'

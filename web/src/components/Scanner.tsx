@@ -1,3 +1,4 @@
+import StockLink from './StockLink';
 import { useRef, useState } from 'react';
 import { fetchCandles } from '../data';
 import { runAnalysis } from '../engine/client';
@@ -82,7 +83,7 @@ export default function Scanner({ watch, onPick, market = 'ALL' }: Props) {
             <tr className="small"><th>Symbol</th><th>Closest chart pattern</th><th>AI</th></tr>
             {shown.map((r) => (
               <tr key={r.inst.id} className="link" onClick={() => onPick(r.inst, tf)}>
-                <td><b>{r.inst.id}</b><div className="small">{r.inst.name}</div></td>
+                <td><b><StockLink inst={r.inst} onOpen={(i) => onPick(i, tf)}>{r.inst.id}</StockLink></b><div className="small">{r.inst.name}</div></td>
                 <td><span className={col(r.eff)}>{r.eff > 0.1 ? '▲' : r.eff < -0.1 ? '▼' : '◆'}</span> {r.pattern} <b>{r.score}%</b><div className="small">Candle: {r.candle} {r.candleScore}%</div></td>
                 <td><b className={r.action === 'BUY' ? 'up' : r.action === 'SELL' ? 'down' : 'neu'}>{r.action}</b><div className="small">{r.conf}%</div></td>
               </tr>

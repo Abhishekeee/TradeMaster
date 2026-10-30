@@ -4,7 +4,7 @@ import EquityChart from './EquityChart';
 
 interface Props {
   symbol: string; tf: string;
-  run(target: 'tp1' | 'tp2', minConf: number, onProgress: (p: number) => void): Promise<StrategyResult>;
+  run(target: 'tp1' | 'tp2', minConf: number, onProgress: (p: number) => void): Promise<StrategyResult | null>;
 }
 
 const col = (x: number) => (x > 0 ? 'up' : x < 0 ? 'down' : '');

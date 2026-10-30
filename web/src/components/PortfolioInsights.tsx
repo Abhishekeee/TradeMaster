@@ -1,3 +1,4 @@
+import StockLink from './StockLink';
 import { shortName, type Stat, type Summary } from '../portfolio';
 import { SIGNAL_LABEL, SIGNAL_TONE, type Call, type Grade, type Insights, type Signal } from '../portfolioInsights';
 
@@ -43,7 +44,7 @@ export function Grades({ ins, sum }: { ins: Insights; sum: Summary }) {
 const GROUPS: { title: string; sigs: Signal[]; tone: string; empty: string }[] = [
   { title: 'Buy more', sigs: ['BUY'], tone: 'up', empty: 'Nothing looks like a clear add right now.' },
   { title: 'Hold', sigs: ['HOLD'], tone: 'neu', empty: 'Nothing to simply hold.' },
-  { title: 'Trim or sell', sigs: ['TRIM', 'SELL'], tone: 'down', empty: 'No sell or trim signals. Good.' },
+  { title: 'Book profit or sell', sigs: ['BOOK', 'SELL'], tone: 'down', empty: 'No sell or profit-booking signals. Good.' },
   { title: 'Review', sigs: ['REVIEW'], tone: 'neu', empty: 'Nothing needs a second look.' },
 ];
 const CONF_RANK = { High: 2, Medium: 1, Low: 0 };
@@ -63,7 +64,7 @@ export function ActionPlan({ stats, calls, onOpen }: Pick<Props, 'stats' | 'call
                 const c = calls.get(s.h.id)!;
                 return (
                   <div key={s.h.id} className="pf-mini" onClick={() => onOpen(s.h.id)}>
-                    <div className="row"><b>{shortName(s.h.inst)}</b><span><span className={`badge ${SIGNAL_TONE[c.signal]}`}>{SIGNAL_LABEL[c.signal].toUpperCase()}</span> <span className="small">{c.conf}</span></span></div>
+                    <div className="row"><b><StockLink inst={s.h.inst}>{shortName(s.h.inst)}</StockLink></b><span><span className={`badge ${SIGNAL_TONE[c.signal]}`}>{SIGNAL_LABEL[c.signal].toUpperCase()}</span> <span className="small">{c.conf}</span></span></div>
                     <div className="small">{c.why}</div>
                   </div>
                 );

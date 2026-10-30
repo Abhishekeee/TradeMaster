@@ -1,3 +1,4 @@
+import StockLink from './StockLink';
 import { useEffect, useMemo, useState } from 'react';
 import Nav from './Nav';
 import SymbolSearch from './SymbolSearch';
@@ -77,7 +78,7 @@ function Movers({ board, watch }: { board: Record<string, Board>; watch: ReturnT
             return (
               <tr key={b.id} className="link" onClick={() => openChart(inst)}>
                 <td style={{ width: 24 }} onClick={(e) => { e.stopPropagation(); watch.toggle(inst); }} title="Add to watchlist">{watch.has(b.id) ? '★' : '☆'}</td>
-                <td><b>{short(b.name)}</b><div className="small">{b.id.replace(/\.(NS|BO)$/, '')}</div></td>
+                <td><b><StockLink inst={inst}>{short(b.name)}</StockLink></b><div className="small">{b.id.replace(/\.(NS|BO)$/, '')}</div></td>
                 <td className="r">{money(b.id, b.price)}</td>
                 <td className={`r ${tone(b.chg)}`} style={heat(b.chg)}><b>{pc(b.chg)}</b></td>
                 <td className={`r ${tone(x)}`}>{pc(x, 1)}</td>
@@ -109,7 +110,7 @@ function WinnerRow({ i, w, bench, open, toggle, watch, own }: { i: number; w: Sc
   return (<>
     <tr>
       <td className="small">{i}</td>
-      <td><b>{short(w.name)}</b>{own && <span className="chip pf-own">you own this</span>}<div className="small">{w.inst.id.replace(/\.(NS|BO)$/, '')}</div></td>
+      <td><b><StockLink inst={inst}>{short(w.name)}</StockLink></b>{own && <span className="chip pf-own">you own this</span>}<div className="small">{w.inst.id.replace(/\.(NS|BO)$/, '')}</div></td>
       <td className={`r ${tone(w.ret1y)}`}><b>{pc(w.ret1y, 1)}</b></td>
       <td className={`r ${tone(vs)}`}>{vs === null ? '–' : `${vs >= 0 ? '+' : '−'}${Math.abs(vs).toFixed(0)} pts`}</td>
       <td className="r"><button className={`mini ${open ? 'on' : ''}`} onClick={toggle}>Why?</button> <button className="mini" onClick={() => openChart(inst)}>Chart</button> <button className="mini" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button></td>
@@ -132,7 +133,7 @@ function IdeaCards({ list, watch, chips = true }: { list: Alt[]; watch: ReturnTy
         <div key={a.inst.id} className="idea">
           <div className="idea-top">
             <span className="idea-rank">{i + 1}</span>
-            <div className="idea-nm"><b>{shortName(a.inst)}</b><span className="small">{a.inst.source === 'mf' ? a.kind : `${a.inst.id.replace(/.(NS|BO)$/, '')} · ${a.kind}`}</span></div>
+            <div className="idea-nm"><b><StockLink inst={a.inst}>{shortName(a.inst)}</StockLink></b><span className="small">{a.inst.source === 'mf' ? a.kind : `${a.inst.id.replace(/.(NS|BO)$/, '')} · ${a.kind}`}</span></div>
             <div className={`idea-ret ${tone(a.r1y)}`}><b>{pc(a.r1y, 1)}</b><span className="small">1 year</span></div>
           </div>
           <div className="idea-bar"><i className={tone(a.r1y)} style={{ width: `${Math.min(100, (Math.abs(a.r1y ?? 0) / best) * 100)}%` }} /></div>
@@ -268,7 +269,7 @@ export default function Home() {
             const b = board[t.id];
             return (
               <div key={t.id} className="hm-tile" onClick={() => openChart(toInst(t.id, t.name))} title="Open chart">
-                <div className="small">{t.name}</div>
+                <div className="small"><StockLink inst={toInst(t.id, t.name)}>{t.name}</StockLink></div>
                 <b className="hm-lvl">{b ? level(b.price) : '…'}</b>
                 <span className={tone(b?.chg)}>{b ? pc(b.chg) : ''}</span>
                 <Spark id={`sg-${t.id.replace(/\W/g, "")}`} data={sparks[t.id]} up={(b?.chg ?? 0) >= 0} />
@@ -293,7 +294,7 @@ export default function Home() {
                 <div className="hm-sectors">
                   {sectors.map((s) => { const b = board[s.id]; return (
                     <div key={s.id} className="hm-sector" style={heat(b?.chg)} onClick={() => openChart(toInst(s.id, s.name))} title="Open chart">
-                      <b>{s.name}</b><span className={tone(b?.chg)}>{b ? pc(b.chg) : '…'}</span><span className="small">1 yr {pc(b?.chg1y, 0)}</span>
+                      <b><StockLink inst={toInst(s.id, s.name)}>{s.name}</StockLink></b><span className={tone(b?.chg)}>{b ? pc(b.chg) : '…'}</span><span className="small">1 yr {pc(b?.chg1y, 0)}</span>
                     </div>
                   ); })}
                 </div>

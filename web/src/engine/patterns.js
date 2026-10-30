@@ -600,7 +600,7 @@ const global = {};
   // Combines pattern match, trend, RSI, candle signal and the pattern's own track record on this symbol/timeframe
   // (from the backtest) into one suggestion with entry, stop loss and targets. Rules + statistics, not a guarantee.
   const strikeStep = (p) => (p < 25 ? 0.5 : p < 50 ? 1 : p < 100 ? 2.5 : p < 500 ? 5 : p < 2000 ? 10 : p < 10000 ? 50 : 100);
-  const expiryHint = (tf) => ({ '1m': 'nearest weekly (0-7 days)', '5m': 'nearest weekly (0-7 days)', '15m': 'nearest weekly (0-7 days)', '1h': '1-2 weeks out', '4h': '2-3 weeks out', '1D': '3-6 weeks out', '1W': '2-3 months out' }[tf] || '1-3 weeks out');
+  const expiryHint = (tf) => ({ '1m': 'nearest weekly (0-7 days)', '5m': 'nearest weekly (0-7 days)', '15m': 'nearest weekly (0-7 days)', '30m': 'nearest weekly (0-7 days)', '1h': '1-2 weeks out', '4h': '2-3 weeks out', '1D': '3-6 weeks out', '1W': '2-3 months out' }[tf] || '1-3 weeks out');
 
   const MIN_CONF = 50;
   function advise(cs, a, bt, opt) {

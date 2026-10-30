@@ -1,3 +1,4 @@
+import StockLink from './StockLink';
 import { shortName, type Stat } from '../portfolio';
 import type { Alt } from '../portfolioAlternatives';
 import type { Instrument } from '../types';
@@ -12,7 +13,7 @@ function Row({ a, base, watch, onChart }: { a: Alt; base: Stat | null; watch: Wa
   return (
     <tr>
       <td>
-        <b>{shortName(a.inst)}</b> <span className="chip">{a.kind}</span>
+        <b><StockLink inst={a.inst}>{shortName(a.inst)}</StockLink></b> <span className="chip">{a.kind}</span>
         <div className="small pf-why">{a.why.slice(0, 3).join(' ')}</div>
       </td>
       <td className={`r ${tone(a.r1y)}`}>{pc(a.r1y)}{better !== null && <div className="small">{better >= 0 ? '+' : '−'}{Math.abs(better).toFixed(0)} pts vs yours</div>}</td>

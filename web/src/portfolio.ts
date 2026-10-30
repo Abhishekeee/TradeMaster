@@ -5,7 +5,16 @@ import { rsiSeries } from './indicators';
 
 /* ---------------------------------------------------------------- what the user types in */
 export interface Lot { id: string; qty: number; price: number; date?: string }   // one purchase; date is "YYYY-MM-DD"
-export interface Holding { id: string; inst: Instrument; lots: Lot[] }
+/** What the owner intends to do with a holding; the answers to the questions asked when it is added. */
+export interface Plan {
+  horizon: 'short' | 'long' | 'date';   // under a year, a year or more, or until a chosen date
+  until?: string;                       // "YYYY-MM-DD", when horizon is 'date'
+  purpose?: 'growth' | 'income' | 'quick' | 'safe';
+  target?: number;                      // profit (%) the owner would be happy to book
+  loss?: number;                        // loss (%) at which the owner wants to rethink
+  calm?: 'calm' | 'uneasy' | 'panic';   // how a 20% fall would feel
+}
+export interface Holding { id: string; inst: Instrument; lots: Lot[]; plan?: Plan }
 export interface Person { id: string; name: string; holdings: Holding[] }
 interface Store { active: string; people: Person[] }
 
@@ -21,7 +30,7 @@ function load(): Store {
   return { active: id, people: [{ id, name: 'My portfolio', holdings: [] }] };
 }
 
-export interface NewLot { inst: Instrument; qty: number; price: number; date?: string }
+export interface NewLot { inst: Instrument; qty: number; price: number; date?: string; plan?: Plan }
 
 export function usePortfolios() {
   const [store, setStore] = useState<Store>(load);
@@ -37,7 +46,7 @@ export function usePortfolios() {
     for (const it of items) {
       const lot: Lot = { id: uid(), qty: it.qty, price: it.price, date: it.date };
       const h = hs.find((x) => x.inst.id === it.inst.id);
-      if (h) h.lots.push(lot); else hs.push({ id: uid(), inst: it.inst, lots: [lot] });
+      if (h) { h.lots.push(lot); if (it.plan) h.plan = it.plan; } else hs.push({ id: uid(), inst: it.inst, lots: [lot], plan: it.plan });
     }
     return { ...p, holdings: hs };
   }), [edit]);
@@ -50,6 +59,7 @@ export function usePortfolios() {
     ...p, holdings: p.holdings.map((h) => (h.id === hid ? { ...h, lots: h.lots.filter((l) => l.id !== lid) } : h)).filter((h) => h.lots.length),
   })), [edit]);
 
+  const setPlan = useCallback((hid: string, plan: Plan | undefined) => edit((p) => ({ ...p, holdings: p.holdings.map((h) => (h.id === hid ? { ...h, plan } : h)) })), [edit]);
   const clearHoldings = useCallback(() => edit((p) => ({ ...p, holdings: [] })), [edit]);
   const removeHolding = useCallback((hid: string) => edit((p) => ({ ...p, holdings: p.holdings.filter((h) => h.id !== hid) })), [edit]);
 
@@ -62,7 +72,7 @@ export function usePortfolios() {
   }), []);
   const setActive = useCallback((id: string) => setStore((s) => ({ ...s, active: id })), []);
 
-  return { people: store.people, person, addLots, setLot, removeLot, removeHolding, clearHoldings, addPerson, rename, removePerson, setActive };
+  return { people: store.people, person, addLots, setPlan, setLot, removeLot, removeHolding, clearHoldings, addPerson, rename, removePerson, setActive };
 }
 export type Portfolios = ReturnType<typeof usePortfolios>;
 

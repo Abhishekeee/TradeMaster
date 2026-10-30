@@ -1,3 +1,4 @@
+import StockLink from './StockLink';
 import { useEffect, useMemo, useState } from 'react';
 import { coachTimeframe, coachTrade, type Coaching } from '../coach';
 import { currencyOf, fetchCandles, fetchLivePrices } from '../data';
@@ -101,7 +102,7 @@ function PositionCard({ p, px, cur, paper, onOpen, atr, viewed, onPreview }: { p
     <div className={`pcard ${pl >= 0 ? 'win' : 'lose'}`}>
       <div className="phead">
         <button className="plink" title="Show this chart" disabled={p.inst.source === 'nse'} onClick={() => onOpen(p.inst)}>
-          <b>{p.inst.id}</b>
+          <b><StockLink inst={p.inst} onOpen={onOpen}>{p.inst.id}</StockLink></b>
           <span className={`badge ${long ? 'up' : 'down'}`}>{long ? 'LONG' : 'SHORT'}</span>
         </button>
         <div className={`ppl ${col(pl)}`}><b>{cur.signed(pl)}</b><span>{pct >= 0 ? '+' : '−'}{Math.abs(pct).toFixed(2)}%</span></div>

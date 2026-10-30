@@ -1,9 +1,42 @@
-import { fmt, type Advice, type Instrument, type StrategyResult } from '../types';
+import { fmt, TF_SEC, type Advice, type Instrument, type StrategyResult } from '../types';
 import { verdictOf } from './StrategyTester';
+import Info from './Info';
 
 interface Props {
   advice: Advice | null; inst: Instrument; tf: string; historyReady: boolean; strat: StrategyResult | null;
+  /** why there is no verdict: too few candles (a new listing) or the checks could not run */
+  unavailable?: 'short' | 'failed' | null; bars?: number; setTf?(tf: string): void;
   showOnChart: boolean; setShowOnChart(v: boolean): void; onSend(): void;
+}
+
+/** Smaller timeframes to try when the current one has too little history. */
+const smaller = (tf: string) => ['1D', '1h', '30m', '15m', '5m'].filter((x) => x !== tf && (TF_SEC[x] ?? 0) < (TF_SEC[tf] ?? Infinity)).slice(0, 3);
+
+function Unavailable({ why, tf, bars, setTf }: { why: 'short' | 'failed'; tf: string; bars: number; setTf?(tf: string): void }) {
+  const alt = smaller(tf);
+  return (
+    <aside className="panel">
+      <div className="adv-hero neu">
+        <div style={{ flex: 1 }}>
+          <div className="hud-k">AI advisor · {tf}</div>
+          <div className="adv-verb neu" style={{ marginTop: 6 }}>NOT YET</div>
+          <div className="adv-sub">{why === 'short' ? 'Too little price history to judge' : 'Could not finish the checks'}</div>
+        </div>
+      </div>
+      <p className="small" style={{ margin: '12px 2px' }}>
+        {why === 'short'
+          ? `This ${tf} chart has only ${bars} candle${bars === 1 ? '' : 's'}, and the advisor needs about 60 to read a trend and test it on the past. That is normal for a newly listed stock or IPO.`
+          : 'Something went wrong while testing the setup on past candles. Try again, or switch timeframe.'}
+      </p>
+      {setTf && alt.length > 0 && (
+        <div className="pf-row" style={{ flexWrap: 'wrap' }}>
+          <span className="small">{why === 'short' ? 'A smaller timeframe has more candles:' : 'Try:'}</span>
+          {alt.map((x) => <button key={x} className="mini" onClick={() => setTf(x)}>{x}</button>)}
+        </div>
+      )}
+      <p className="disc">Rules and statistics, not a prediction. Until enough history exists, judge a new listing by its business, price and news, not by chart patterns.</p>
+    </aside>
+  );
 }
 
 const cls = (a: Advice['action']) => (a === 'BUY' ? 'up' : a === 'SELL' ? 'down' : 'neu');
@@ -19,7 +52,8 @@ function Ring({ value }: { value: number }) {
   );
 }
 
-export default function Advisor({ advice: a, inst, tf, historyReady, strat, showOnChart, setShowOnChart, onSend }: Props) {
+export default function Advisor({ advice: a, unavailable, bars = 0, setTf, inst, tf, historyReady, strat, showOnChart, setShowOnChart, onSend }: Props) {
+  if (!a && unavailable) return <Unavailable why={unavailable} tf={tf} bars={bars} setTf={setTf} />;
   if (!a) return (
     <aside className="panel" aria-busy="true">
       <div className="adv-hero">
@@ -42,7 +76,7 @@ export default function Advisor({ advice: a, inst, tf, historyReady, strat, show
     <aside className="panel">
       <div className={`adv-hero ${cls(a.action)}`}>
         <div style={{ flex: 1, position: 'relative' }}>
-          <div className="hud-k">AI advisor · {tf}</div>
+          <div className="hud-k">AI advisor · {tf}<Info width={300}><p><b>The advisor</b> reads the chart with fixed rules, not a crystal ball. It looks at the pattern, the trend, how that same pattern did on this stock before, and what the bigger timeframe says.</p><p><b>Confidence</b> (the ring) is how many of those agree, from 0 to 100%. WAIT means there is no clear edge, which is a fine answer.</p></Info></div>
           <div className={`adv-verb ${cls(a.action)}`} style={{ marginTop: 6 }}>{verb}</div>
           <div className="adv-sub">{a.action === 'WAIT' ? 'No clear edge right now' : `${a.level} confidence${a.setup ? ` · ${a.setup}` : ''}`}</div>
         </div>
@@ -56,7 +90,7 @@ export default function Advisor({ advice: a, inst, tf, historyReady, strat, show
           <div className="rung en"><span>Entry</span><b>{fmt(a.entry)}</b><em style={{ color: 'var(--mute)' }}>now</em></div>
           <div className="rung sl"><span>Stop</span><b>{fmt(a.sl as number)}</b><em>{pct(a.sl as number, a.entry)}</em></div>
         </div>
-        <div className="rr"><span>Reward : risk</span><b>{a.rr.toFixed(1)} : 1</b></div>
+        <div className="rr"><span>Reward : risk<Info width={300}><p><b>Entry</b> is the price now. <b>Stop</b> is where to get out if it goes wrong, which caps your loss. <b>Target 1 and 2</b> are where to book profit.</p><p><b>Reward : risk</b> is how much you could gain for every ₹1 you risk. 2 : 1 means the first target is twice as far away as the stop. Below 1 : 1 is rarely worth taking.</p></Info></span><b>{a.rr.toFixed(1)} : 1</b></div>
         <button className="cta" onClick={onSend}>Send to paper trade →</button>
         <label className="chk" style={{ margin: '10px 2px 4px', fontSize: 12 }}><input type="checkbox" checked={showOnChart} onChange={(e) => setShowOnChart(e.target.checked)} /> Show levels on chart</label>
 
@@ -68,11 +102,11 @@ export default function Advisor({ advice: a, inst, tf, historyReady, strat, show
         )}
       </>)}
 
-      <h3 style={{ marginTop: 16 }}>Why</h3>
+      <h3 style={{ marginTop: 16 }}>Why<Info><p>The reasons behind the call. A ⚠ item is something that could make it go wrong, so read those too.</p></Info></h3>
       <div className="reasons">{a.reasons.map((r) => <span key={r}>{r}</span>)}{a.warnings.map((w) => <span key={w} className="w" title={w}>⚠ {w.length > 62 ? `${w.slice(0, 60)}…` : w}</span>)}</div>
 
       <details className="more">
-        <summary>Track record of this setup</summary>
+        <summary>Track record of this setup<Info width={300}><p>How this same pattern did on this stock's own history: how many times it showed up and how often the price then moved the right way.</p><p><b>Beat a blind guess</b> means it was right more often than a coin flip would be. <b>Lost to</b> means it was worse.</p></Info></summary>
         <div>
           {a.history ? (<>
             <b>{a.history.name}</b> on {inst.id} {tf}: {a.history.n} past trades, <b>{a.history.winRate.toFixed(0)}%</b> won
@@ -84,7 +118,7 @@ export default function Advisor({ advice: a, inst, tf, historyReady, strat, show
       </details>
 
       <details className="more">
-        <summary>Strategy check</summary>
+        <summary>Strategy check<Info width={300}><p>Replays the advisor over all the past candles with pretend money, risking 1% on each trade, and compares the result with simply buying and holding.</p><p><b>Profit factor</b> is the total won divided by the total lost. Above 1 it made money; below 1 it lost.</p><span className="ex">Past results do not promise future ones.</span></Info></summary>
         <div>
           {strat ? (() => {
             const v = verdictOf(strat);

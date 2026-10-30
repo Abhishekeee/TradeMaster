@@ -1,11 +1,13 @@
+import Floating, { inFloat } from './Floating';
 import { useEffect, useRef, useState } from 'react';
 
 interface Props { tf: string; setTf(t: string): void }
 
 const GROUPS: [string, [string, string][]][] = [
-  ['Minutes', [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes']]],
+  ['Minutes', [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes']]],
   ['Hours', [['1h', '1 hour'], ['4h', '4 hours']]],
   ['Days', [['1D', '1 day'], ['1W', '1 week']]],
+  ['Months', [['1M', '1 month'], ['3M', '3 months (quarter)'], ['6M', '6 months (half-year)'], ['1Y', '1 year']]],
 ];
 const NAME: Record<string, string> = Object.fromEntries(GROUPS.flatMap(([, l]) => l));
 const DEFAULT_FAV = ['5m', '15m', '1h', '1D'];
@@ -21,7 +23,7 @@ export default function Timeframe({ tf, setTf }: Props) {
   const [fav, setFav] = useState<string[]>(loadFav);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const close = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node) && !inFloat(e.target)) setOpen(false); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
@@ -41,7 +43,7 @@ export default function Timeframe({ tf, setTf }: Props) {
         <button className="tfmore" onClick={() => setOpen(!open)} aria-label="All intervals" title="All intervals">▾</button>
       </div>
       {open && (
-        <div className="popover tfmenu">
+        <Floating anchor={box} className="popover tfmenu" width={220} align="right">
           {GROUPS.map(([g, items]) => (
             <div key={g}>
               <div className="hud-k tfhead">{g}</div>
@@ -53,7 +55,7 @@ export default function Timeframe({ tf, setTf }: Props) {
               ))}
             </div>
           ))}
-        </div>
+        </Floating>
       )}
     </div>
   );

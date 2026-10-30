@@ -8,7 +8,7 @@ import StrategyTester from './StrategyTester';
 type Paper = ReturnType<typeof usePaper>;
 interface Props {
   paper: Paper; cur: Cur; symbol: string; tf: string;
-  runStrategy(target: 'tp1' | 'tp2', minConf: number, onProgress: (p: number) => void): Promise<StrategyResult>;
+  runStrategy(target: 'tp1' | 'tp2', minConf: number, onProgress: (p: number) => void): Promise<StrategyResult | null>;
 }
 
 const col = (x: number) => (x > 0 ? 'up' : x < 0 ? 'down' : '');
