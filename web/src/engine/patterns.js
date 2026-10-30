@@ -539,12 +539,14 @@ const global = {};
 
   /* ------------------------------------------------------------------ walk-forward backtest */
   // At every step only candles up to bar i are visible; the outcome is the close H bars later.
+  const warmFor = (n) => (n >= 300 ? 120 : Math.max(30, Math.floor(n * 0.4)));
   function backtest(cs, opt) {
     opt = opt || {};
-    const H = opt.horizon || 20, minScore = opt.minScore || 55, step = opt.step || 3;
-    const Hc = Math.max(3, Math.round(H / 4));
-    const warm = 120;
     const n = cs.length;
+    // a young listing has few candles: test on whatever is there instead of waiting for 120 bars
+    const warm = warmFor(n);
+    const H = Math.min(opt.horizon || 20, Math.max(5, Math.floor((n - warm) / 2))), minScore = opt.minScore || 55, step = opt.step || 3;
+    const Hc = Math.max(3, Math.round(H / 4));
     const upPct = (h) => { let up = 0, t = 0; for (let i = warm; i + h < n; i++) { t++; if (cs[i + h].close > cs[i].close) up++; } return t ? (100 * up) / t : 50; };
     const baseUp = upPct(H), baseUpC = upPct(Hc);
     const recs = [];
@@ -719,7 +721,7 @@ const global = {};
   function simulate(cs, opt) {
     opt = opt || {};
     const target = opt.target === 'tp2' ? 'tp2' : 'tp1';
-    const minConf = opt.minConf || 50, step = opt.step || 2, maxHold = opt.maxHold || 60, warm = 120;
+    const minConf = opt.minConf || 50, step = opt.step || 2, maxHold = opt.maxHold || 60, warm = warmFor(cs.length);
     const fee = (opt.feePct === undefined ? 0.05 : opt.feePct) / 100;
     const riskFrac = (opt.riskPct || 1) / 100;
     const trades = [];

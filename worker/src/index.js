@@ -141,6 +141,16 @@ async function route(u, extra) {
     return body ? json(body, 200, extra) : json('{"error":"nse unavailable"}', 502, extra);
   }
 
+  if (p === '/api/depth') {
+    const symbol = q.get('symbol') ?? '';
+    if (!/^[A-Z0-9&-]{1,20}$/.test(symbol)) return json('{"error":"bad request"}', 400, extra);
+    const raw = await nseGet('quote-equity?symbol=' + symbol + '&section=trade_info');
+    let book;
+    try { book = JSON.parse(raw ?? '').marketDeptOrderBook; } catch { /* handled below */ }
+    if (!book) return json('{"error":"depth unavailable"}', 502, extra);
+    return json(JSON.stringify({ buy: book.totalBuyQuantity, sell: book.totalSellQuantity, bid: book.bid, ask: book.ask }), 200, extra);
+  }
+
   return json('{"error":"not found"}', 404, extra);
 }
 

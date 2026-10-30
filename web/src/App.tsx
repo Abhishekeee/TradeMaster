@@ -27,10 +27,13 @@ import { periodChange, periodSource } from './periodChange';
 import PeriodBadge from './components/PeriodBadge';
 import Info from './components/Info';
 import LiveBar from './components/LiveBar';
+import Depth from './components/Depth';
 import Timeframe from './components/Timeframe';
 import { runAnalysis, runBacktest, runStrategy } from './engine/client';
 import { MONTH_TFS, TFS, TF_SEC, cls, fmt, word, type Advice, type Analysis, type BacktestResult, type StrategyResult, type Candle, type Instrument, type MtfRow, type Signal } from './types';
 
+/** fewest candles the advisor will read; a young listing is tested on whatever history it has */
+const MIN_BARS = 40;
 const HIGHER: Record<string, string> = { '1m': '15m', '5m': '1h', '15m': '1h', '30m': '4h', '1h': '4h', '4h': '1D', '1D': '1W', '1W': '1M', '1M': '3M', '3M': '1Y', '6M': '1Y' };
 
 function loadPrefs() {
@@ -259,7 +262,7 @@ export default function App() {
   useEffect(() => {
     setBt(null); setStrat(null); setAdvFail(false);
     if (loading) return;
-    if (candles.current.length < 60) { setAdvFail(true); return; }   // a new listing: nothing to judge yet
+    if (candles.current.length < MIN_BARS) { setAdvFail(true); return; }   // a new listing: nothing to judge yet
     let dead = false;
     // a stuck worker must not leave the advisor "reading" forever
     const giveUp = window.setTimeout(() => { if (!dead) setAdvFail(true); }, 40000);
@@ -285,7 +288,7 @@ export default function App() {
     const up = HIGHER[tf];
     setHtf(null); setHtfDone(false);
     if (loading) return;
-    if (demo || !up || candles.current.length < 60) { setHtfDone(true); return; }
+    if (demo || !up || candles.current.length < MIN_BARS) { setHtfDone(true); return; }
     let dead = false;
     (async () => {
       try {
@@ -300,7 +303,7 @@ export default function App() {
 
   const advice: Advice | null = useMemo(() => {
     const c = candles.current;
-    if (!analysis || c.length < 60 || !bt || !strat || !htfDone) return null; // show "reading the chart" until every input is in
+    if (!analysis || c.length < MIN_BARS || !bt || !strat || !htfDone) return null; // show "reading the chart" until every input is in
     const base = advise(c.slice(-500), analysis, bt, { tf, strat, isOption: inst.kind === 'OPTION', step: inst.id === '^NSEI' ? 50 : inst.id === '^NSEBANK' ? 100 : undefined }) as Advice;
     if (!htf || base.action === 'WAIT') return base;
     // trading with the higher timeframe is safer than trading against it
@@ -329,14 +332,18 @@ export default function App() {
 
   const levels = useMemo(() => (analysis && candles.current.length >= 60 ? (srLevels(candles.current) as { price: number; touches: number }[]) : []), [analysis]);
 
+  const adviceNote = (a: Advice) => `AI suggestion (${a.level} confidence ${a.conf}%): entry ${fmt(a.entry)}, stop ${fmt(a.sl as number)}, first target ${fmt(a.tp1 as number)}, final target ${fmt(a.tp2 as number)}. Edit freely.`;
   const sendAdvice = () => {
     if (!advice || advice.action === 'WAIT' || advice.sl === null || advice.tp2 === null) return;
-    setPrefill({
-      side: advice.action === 'BUY' ? 'long' : 'short', sl: advice.sl, tp: advice.tp2, nonce: Date.now(),
-      note: `AI advisor (${advice.level} confidence ${advice.conf}%): stop ${fmt(advice.sl)}, first target ${fmt(advice.tp1 as number)}, final target ${fmt(advice.tp2)}. Edit freely.`,
-    });
+    setPrefill({ side: advice.action === 'BUY' ? 'long' : 'short', sl: advice.sl, tp: advice.tp2, note: adviceNote(advice), nonce: Date.now() });
     setRtab('trade');
   };
+  // the trade panel starts with the AI's stop and target, and says where it would enter, as soon as a new suggestion arrives
+  const adviceKey = advice && advice.action !== 'WAIT' && advice.sl !== null && advice.tp2 !== null ? `${inst.id}|${tf}|${advice.action}|${advice.sl}|${advice.tp2}` : '';
+  useEffect(() => {
+    if (!adviceKey || !advice || advice.sl === null || advice.tp2 === null) return;
+    setPrefill({ side: advice.action === 'BUY' ? 'long' : 'short', sl: advice.sl, tp: advice.tp2, note: adviceNote(advice), nonce: Date.now() });
+  }, [adviceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // keep prices fresh for other instruments that have open positions or active price alerts (the viewed one is live)
   const watched = [...paper.acc.positions.map((p) => p.inst), ...alerts.alerts.filter((x) => !x.fired && x.kind !== 'pattern').map((x) => x.inst)];
@@ -497,6 +504,7 @@ export default function App() {
 
       <div className="toolbar">
         <LiveBar name={inst.name} kind={inst.kind} tfLabel={tf} symbol={symbol.replace(/.(NS|BO)$/, '')} leading={<button className={`star theme ${watch.has(inst.id) ? 'on' : ''}`} style={{ padding: '0 6px', border: 0, background: 'none', fontSize: 15 }} title="Add / remove this symbol from your watchlist" onClick={() => watch.toggle(inst)}>{watch.has(inst.id) ? '★' : '☆'}</button>} status={feed} demo={demo} px={price?.px ?? prices[inst.id] ?? null} ch={price?.ch ?? null} day={day} lastTick={lastTick} candleTime={candles.current.length ? candles.current[candles.current.length - 1].time : null} tf={tf} unit={nativeCcy === 'GBp' ? 'GBp' : nativeCcy} approx={price && nativeCcy !== display ? `≈ ${cur.money(price.px * fx.usdPer(nativeCcy))}` : undefined} />
+        <Depth symbol={symbol.replace(/\.(NS|BO)$/, '')} nse={/\.(NS|BO)$/.test(symbol)} candles={candles} />
         <span className="sp" />
         <Timeframe tf={tf} setTf={setTf} />
         <select value={type} aria-label="Chart type" onChange={(e) => setType(e.target.value as typeof type)}>
@@ -516,7 +524,7 @@ export default function App() {
         {showSide && <div className="grip r" onPointerDown={drag('r')} onDoubleClick={() => resetW('r')} title="Drag to resize · double-click to reset" />}
         {!showMenu ? null : analysis
           ? <Menu analysis={analysis} tab={tab} setTab={setTab} bias={bias} setBias={setBias} sort={sort} setSort={setSort} q={q} setQ={setQ} sel={sel} onSelect={select} />
-          : <aside className="menu"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
+          : <aside className="menu"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : candles.current.length < 30 ? `Only ${candles.current.length} candles so far; chart patterns need at least 30. Try a smaller timeframe.` : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
         <main className="chartwrap">
           <div className="chartarea">
           <div className="hud">
@@ -552,14 +560,14 @@ export default function App() {
             <button className={rtab === 'trade' ? 'on' : ''} onClick={() => setRtab('trade')}>Trade{paper.acc.positions.length ? ` (${paper.acc.positions.length})` : ''}</button>
           </div>
           {rtab === 'advisor'
-            ? <Advisor advice={advice} unavailable={!loading && advFail ? (candles.current.length < 60 ? 'short' : 'failed') : null} bars={candles.current.length} setTf={setTf} inst={inst} tf={tf} historyReady={bt !== null} strat={strat} showOnChart={showAdvice} setShowOnChart={setShowAdvice} onSend={sendAdvice} />
+            ? <Advisor advice={advice} unavailable={!loading && advFail ? (candles.current.length < MIN_BARS ? 'short' : 'failed') : null} bars={candles.current.length} setTf={setTf} inst={inst} tf={tf} historyReady={bt !== null} strat={strat} showOnChart={showAdvice} setShowOnChart={setShowAdvice} onSend={sendAdvice} />
             : rtab === 'stats'
             ? <Stats paper={paper} cur={cur} symbol={symbol} tf={tf} runStrategy={strategy} />
             : rtab === 'alerts'
             ? <Alerts inst={inst} tf={tf} price={prices[inst.id] ?? price?.px ?? null} api={alerts} />
             : rtab === 'trade'
             ? <Trade inst={inst} price={prices[inst.id] ?? price?.px ?? null} prices={prices} paper={paper} prefill={prefill} cur={cur} usdPer={fx.usdPer} onOpen={setInst} atr={atr} onPreview={onPreview} />
-            : analysis ? <Panel analysis={analysis} symbol={symbol} tf={tf} sel={sel} signals={signals} onSelect={select} onTf={setTf} scan={scan} backtest={backtest} onSetup={tradeSetup} /> : <aside className="panel"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
+            : analysis ? <Panel analysis={analysis} symbol={symbol} tf={tf} sel={sel} signals={signals} onSelect={select} onTf={setTf} scan={scan} backtest={backtest} onSetup={tradeSetup} /> : <aside className="panel"><p className="small" style={{ padding: 12 }}>{loading ? 'Loading…' : candles.current.length < 30 ? `Only ${candles.current.length} candles so far; chart patterns need at least 30. Try a smaller timeframe.` : 'No pattern analysis for this chart yet. Options that are new or expire soon have very little history; pick a later expiry or a smaller timeframe.'}</p></aside>}
         </div>
       </div>
     </>

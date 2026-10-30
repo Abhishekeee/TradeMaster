@@ -78,6 +78,7 @@ export default function AddWizard({ onAdd, market, setMarket }: { onAdd(l: NewLo
   const [added, setAdded] = useState<string | null>(null);
   const [win, setWin] = useState('');   // which period was picked on the date question (today, past month, past year ...)
   const [mon, setMon] = useState('');   // and which month of it, when the period has many matching days
+  const [ipo, setIpo] = useState(false);   // bought in the IPO at the issue price, which is not a price the stock ever traded at
   const [days, setDays] = useState<DayRange[] | 'loading' | null>(null);   // what the stock really traded at, day by day, to check the buy price and date
 
   const idx = ORDER.indexOf(step);
@@ -89,11 +90,11 @@ export default function AddWizard({ onAdd, market, setMarket }: { onAdd(l: NewLo
 
   const reset = () => {
     setStep('kind'); setInst(null); setNow(null); setA(''); setB(''); setDate(''); setHorizon(''); setUntil('');
-    setPurpose(undefined); setTarget(undefined); setLoss(undefined); setCalm(undefined); setCustom(''); setAdded(null); setDays(null); setWin(''); setMon('');
+    setPurpose(undefined); setTarget(undefined); setLoss(undefined); setCalm(undefined); setCustom(''); setAdded(null); setDays(null); setWin(''); setMon(''); setIpo(false);
   };
-  const pickKind = (k: 'stock' | 'fund') => { setKind(k); setInst(null); setNow(null); setA(''); setB(''); setDays(null); setDate(''); setWin(''); setMon(''); setStep('pick'); };
+  const pickKind = (k: 'stock' | 'fund') => { setKind(k); setInst(null); setNow(null); setA(''); setB(''); setDays(null); setDate(''); setWin(''); setMon(''); setIpo(false); setStep('pick'); };
   const pick = async (i: Instrument) => {
-    setInst(i); setNow(null); setDate(''); setWin(''); setMon(''); setStep('a');
+    setInst(i); setNow(null); setDate(''); setWin(''); setMon(''); setIpo(false); setStep('a');
     setDays('loading');
     fetchDayRanges(i).then((d) => setDays((cur) => (cur === 'loading' ? d : cur)));   // a later pick resets it first, so a slow answer for the old stock is ignored
     const q = (await fetchLivePrices([i]))[i.id];
@@ -101,7 +102,7 @@ export default function AddWizard({ onAdd, market, setMarket }: { onAdd(l: NewLo
   };
 
   // is the price (and date) one this stock could really have had? Only for stocks: a fund app shows today's value, not a buy price.
-  const list = stock && Array.isArray(days) ? days : null;
+  const list = stock && !ipo && Array.isArray(days) ? days : null;   // an IPO allotment price is not checked against traded prices
   const price = +b;
   const sym = inst ? ({ INR: '₹', USD: '$', EUR: '€', GBP: '£', JPY: '¥' } as Record<string, string>)[currencyOf(inst)] ?? '' : '';
   const num = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -238,6 +239,8 @@ export default function AddWizard({ onAdd, market, setMarket }: { onAdd(l: NewLo
         {step === 'b' && <>
           {q(stock ? 'What price did you pay per share?' : 'What is it worth today?', stock ? 'Your average buy price if you bought more than once.' : 'The "Current value" shown in your fund app.')}
           {numField(b, setB, stock ? 'e.g. 2450' : 'e.g. 68000', stock ? undefined : '₹')}
+          {stock && <label className="chk" style={{ margin: '8px 2px', fontSize: 13 }}><input type="checkbox" checked={ipo} onChange={(e) => setIpo(e.target.checked)} /> I got it in the IPO (this is the issue price I was allotted at)</label>}
+          {stock && ipo && <p className="qa-hint">Enter the issue (allotment) price. We won't check it against trading prices, since an IPO price comes before the stock lists. On the next question, enter the allotment or listing date.</p>}
           {stock && now !== null && <button className="qa-chip" onClick={() => setB(String(now))}>It trades at {now} now · use this</button>}
           {stock && days === 'loading' && +b > 0 && <p className="qa-hint">Checking this price against the stock's history…</p>}
           {stock && days === 'loading' && !(+b > 0) && <p className="qa-hint">Loading the price chart…</p>}

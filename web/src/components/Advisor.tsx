@@ -25,7 +25,7 @@ function Unavailable({ why, tf, bars, setTf }: { why: 'short' | 'failed'; tf: st
       </div>
       <p className="small" style={{ margin: '12px 2px' }}>
         {why === 'short'
-          ? `This ${tf} chart has only ${bars} candle${bars === 1 ? '' : 's'}, and the advisor needs about 60 to read a trend and test it on the past. That is normal for a newly listed stock or IPO.`
+          ? `This ${tf} chart has only ${bars} candle${bars === 1 ? '' : 's'}, and the advisor needs about 40 to read a trend and test it on the past. That is normal for a newly listed stock or IPO.`
           : 'Something went wrong while testing the setup on past candles. Try again, or switch timeframe.'}
       </p>
       {setTf && alt.length > 0 && (
